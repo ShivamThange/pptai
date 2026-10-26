@@ -17,7 +17,8 @@ from infrastructure.ingestion.knowledge_extractor import (
 )
 from application.pipeline.orchestrator import MultiAgentOptions, run_multi_agent_pipeline
 from application.services.slide_editor import edit_multi_agent_slide
-from infrastructure.ingestion.slide_composer import compose_presentation_parallel, validate_slide_spec
+from infrastructure.ingestion.slide_composer import (compose_presentation_parallel, validate_slide_grounding,
+                                                     validate_slide_spec, _placeholder_slide)
 from infrastructure.ingestion.source_adapter import adapt_structural_ir, build_raw_extraction
 from infrastructure.ingestion.storyboard_planner import validate_storyboard
 from contracts.ir1_schema import EvidenceRef, KnowledgeUnit, ValidatedIR1
@@ -437,3 +438,22 @@ def test_scoped_editor_preserves_validated_ir1(tmp_path):
     assert (original_revision / "ir1_validated.json").read_text(encoding="utf-8") == before
     assert portable_value(json.loads((updated.parent / "ir1_validated.json").read_text(encoding="utf-8"))) == portable_value(json.loads(before))
     assert json.loads((updated.parent / "edits.json").read_text(encoding="utf-8"))[0]["slide_index"] == 1
+
+
+def _plan(title):
+    return SlidePlan(slide_id=3, title=title, objective="Report the measurement", narrative_role="evidence",
+                     chunk_refs=["chunk_1"], source_unit_ids=["ku_1"])
+
+
+@pytest.mark.parametrize("title,expected", [
+    ("Surface Roughness Results", "Surface Roughness Results"),
+    ("Weight loss at 37 °C", "Slide content unavailable"),
+])
+def test_failed_slide_placeholder_survives_deck_validation(title, expected):
+    layouts = json.loads((Path(__file__).resolve().parents[1] / "config" / "ppt_default_layouts.json").read_text(encoding="utf-8"))
+    slide = _placeholder_slide(_plan(title), RuntimeError("Provider HTTP 429: rate limited"), layouts)
+    validate_slide_spec(slide, layouts, allowed_unit_ids={"ku_1"})
+    validate_slide_grounding(slide, {"knowledge_units": [], "assets": [], "source_item_ids": [], "asset_source_items": []})
+    heading = next(item for item in slide.content.values() if item.type == "heading")
+    assert heading.text == expected
+    assert "HTTP 429" in slide.notes

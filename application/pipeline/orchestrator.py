@@ -149,9 +149,9 @@ def run_multi_agent_pipeline(
 def runtime_dependencies():
     # evalute/ and scripts/ are offline analysis tools; hashing them would
     # invalidate every resume cache on each unrelated code touch.
-    return dependency_fingerprint(*[p.relative_to(Path(__file__).resolve().parents[1]).as_posix()
+    return dependency_fingerprint(*[p.relative_to(Path(__file__).resolve().parents[2]).as_posix()
                                    for folder in ("core", "pipeline", "schemas", "tools", "config", "renderers")
-                                   for p in (Path(__file__).resolve().parents[1] / folder).rglob("*.py")
+                                   for p in (Path(__file__).resolve().parents[2] / folder).rglob("*.py")
                                    if "tests" not in p.parts], "renderers/pptxgenjs/builder.js", "renderers/pptxgenjs/package.json",
                                    "renderers/pptxgenjs/package-lock.json")
 
@@ -434,16 +434,22 @@ def _run_multi_agent_pipeline(
             )
         )
         write_ir2(ir2, output_dir)
-        _record_stage(manifest_path, "ir2", input_hash=composition_hash, output=ir2_path)
 
     report(context, "composition", len(storyboard.slides), len(storyboard.slides))
     report(context, "build")
     pptx_path = output_dir / "op_ppt.pptx"
     candidate_path = output_dir / "op_ppt.candidate.pptx"
-    for plan, slide in zip(storyboard.slides, ir2.slides):
-        slide_context = retrieve_slide_context(plan, ir1, chunks, storyboard)
-        validate_slide_spec(slide, layouts_spec, allowed_unit_ids={unit["unit_id"] for unit in slide_context["knowledge_units"]}, assets=slide_context["assets"], source_item_ids=slide_context["source_item_ids"], asset_source_items=slide_context.get("asset_source_items", []))
-        validate_slide_grounding(slide, slide_context)
+    # Only checkpoint ir2 once it survives the deck-wide validation below; a
+    # rejected composition left behind as PASSED was reloaded by every later resume.
+    try:
+        for plan, slide in zip(storyboard.slides, ir2.slides):
+            slide_context = retrieve_slide_context(plan, ir1, chunks, storyboard)
+            validate_slide_spec(slide, layouts_spec, allowed_unit_ids={unit["unit_id"] for unit in slide_context["knowledge_units"]}, assets=slide_context["assets"], source_item_ids=slide_context["source_item_ids"], asset_source_items=slide_context.get("asset_source_items", []))
+            validate_slide_grounding(slide, slide_context)
+    except ValueError:
+        _record_stage(manifest_path, "ir2", input_hash=composition_hash, output=ir2_path, status="FAILED")
+        raise
+    _record_stage(manifest_path, "ir2", input_hash=composition_hash, output=ir2_path)
     builder = PresentationBuilder(layouts_path, backend=options.renderer, asset_registry=AssetRegistry(ir1.assets, run_root=output_dir, source_item_ids=ir1.source_item_ids, asset_source_items=ir1.asset_source_items, min_ppi=options.asset_options.min_ppi), theme=resolved_theme, dynamic_layout=options.dynamic_layout)
     builder.build(ir2.model_dump(exclude_none=True), str(candidate_path))
     atomic_json(output_dir / "layout_report.json", builder.layout_report)

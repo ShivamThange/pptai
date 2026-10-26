@@ -483,21 +483,30 @@ async def compose_single_slide(
     raise SlideCompositionError(f"Slide {plan.slide_id} could not be composed after {max_repairs + 1} attempts: {'; '.join(errors)}")
 
 
-def _placeholder_slide(plan: SlidePlan, error: BaseException) -> SlideSpec:
+def _placeholder_slide(plan: SlidePlan, error: BaseException, layouts_spec: dict[str, Any]) -> SlideSpec:
     """Step 2.2: a failed slide must degrade to a placeholder, not kill the deck."""
-    message = str(error).strip() or error.__class__.__name__
-    return SlideSpec(
-        layout="HEADER_WITH_BODY",
-        content={
-            "title": HeadingContent(text=f"{plan.title}"),
-            "body": BulletsContent(items=[
-                f"This slide could not be composed due to an API or schema error.",
-                f"Details: {message[:180]}",
-            ]),
-        },
-        notes="Placeholder generated after composition failure.",
-        source_unit_ids=list(plan.source_unit_ids),
-    )
+    message = " ".join((str(error).strip() or error.__class__.__name__).split())
+    # The placeholder is re-validated with the rest of the deck, so it may only use
+    # regions its layout declares and visible text carrying no unsupported numbers.
+    heading = HeadingContent(text=plan.title if not mentions(plan.title) else "Slide content unavailable")
+    body = BulletsContent(items=[
+        "This slide could not be composed because the provider call failed.",
+        "Re-run generation with resume enabled to fill it in.",
+    ])
+    catalog = layouts_spec.get("layouts", {})
+    for name in ["HEADER_WITH_BODY", *catalog]:
+        regions = (catalog.get(name) or {}).get("regions", {})
+        head = next((region for region, spec in regions.items() if "heading" in spec.get("allowed_types", [])), None)
+        text = next((region for region, spec in regions.items()
+                     if region != head and set(spec.get("allowed_types", [])) & {"bullets", "text_group"}), None)
+        if head and text:
+            return SlideSpec(
+                layout=name,
+                content={head: heading, text: body},
+                notes=f"Placeholder generated after composition failure: {message[:180]}",
+                source_unit_ids=list(plan.source_unit_ids),
+            )
+    raise ValueError(f"No layout in the catalog can carry a placeholder slide for slide {plan.slide_id}.")
 
 
 async def compose_presentation_parallel(
@@ -548,7 +557,7 @@ async def compose_presentation_parallel(
                 raise
             logging.getLogger(__name__).error(
                 f"Slide {plan.slide_id} ('{plan.title}') failed to compose: {error}; using placeholder")
-            slide = _placeholder_slide(plan, error)
+            slide = _placeholder_slide(plan, error, layouts_spec)
         completed += 1
         report(context, "composition", completed, len(storyboard.slides))
         return slide
