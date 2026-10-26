@@ -101,6 +101,7 @@ class MultiAgentSettings:
     run_max_reserved_tokens: int | None = None
     max_tokens_per_minute: int | None = None
     strict_section_coverage: bool = False
+    force_accept_quality_errors: bool = False
     model_profiles: Mapping[str, ProviderCapabilities] = field(default_factory=dict)
 
     def __post_init__(self):
@@ -208,4 +209,5 @@ def get_multi_agent_settings(environ=None) -> MultiAgentSettings:
         run_max_reserved_tokens=optional('LLM_RUN_MAX_RESERVED_TOKENS'),
         max_tokens_per_minute=optional('LLM_MAX_TOKENS_PER_MINUTE'),
         strict_section_coverage=_bool('STRICT_SECTION_COVERAGE', False, env),
+        force_accept_quality_errors=_bool('FORCE_ACCEPT_QUALITY_ERRORS', False, env),
     )

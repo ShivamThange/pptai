@@ -20,7 +20,7 @@ from infrastructure.llm.llm_client import LLMClient, LLMRequestError
 from infrastructure.llm.llm_run import observe_llm_run
 from infrastructure.ingestion.chunker import build_chunks, write_chunks
 from infrastructure.ingestion.knowledge_extractor import generate_validated_ir1
-from infrastructure.ingestion.quality_controller import assess_final_artifact, write_quality_report, artifact_hash
+from infrastructure.ingestion.quality_controller import assess_final_artifact, write_quality_report, artifact_hash, resolve_readiness
 from infrastructure.ingestion.slide_composer import compose_presentation_parallel, compose_single_slide, retrieve_slide_context, write_ir2, validate_slide_grounding, validate_slide_spec, slide_cache_key
 from infrastructure.ingestion.source_adapter import build_raw_extraction
 from infrastructure.ingestion.storyboard_planner import plan_storyboard, write_storyboard
@@ -54,6 +54,7 @@ class MultiAgentOptions:
     instruction: str = ""
     theme: str = "auto"
     dynamic_layout: bool = True
+    force_accept: bool = False
 
     def __post_init__(self):
         if not isinstance(self.asset_options, AssetOptions):
@@ -457,7 +458,8 @@ def _run_multi_agent_pipeline(
     report(context, "quality checks")
     attempt_dir = output_dir / "quality_attempts" / artifact_hash(candidate_path)
     final_report = assess_final_artifact(candidate_path, attempt_dir, ir1=ir1, ir2=ir2, caller=client,
-                                        judge_enabled=False, deep_verification=False)
+                                        judge_enabled=False, deep_verification=False,
+                                        force_accept=options.force_accept)
     check(context)  # Optional judging may catch provider cancellation internally.
     feedback_by_slide = collect_visual_repair_feedback(final_report, builder)
 
@@ -508,9 +510,17 @@ def _run_multi_agent_pipeline(
                 provider_error = next((error for error in errors if isinstance(error, LLMRequestError)), None)
                 if provider_error is not None:
                     raise provider_error
-                raise ValueError("Scoped visual repair failed: " + " | ".join(str(error) for error in errors))
-            for slide_number, repaired_slide in results:
-                repaired[slide_number - 1] = repaired_slide
+                # Graceful degradation: one failed slide repair must not reject the
+                # deck. Failed slides keep their original IR2 specs; the remainder
+                # of the deck still ships.
+                for index, result in enumerate(results):
+                    if isinstance(result, BaseException):
+                        slide_number = list(feedback_by_slide)[index]
+                        print(f"[WARN] Scoped visual repair failed for slide {slide_number}, reverting to original state: {result}")
+            for result in results:
+                if not isinstance(result, BaseException):
+                    slide_number, repaired_slide = result
+                    repaired[slide_number - 1] = repaired_slide
             return TargetIR2Presentation(output_filename="op_ppt.pptx", slides=repaired)
 
         report(context, "composition")
@@ -521,12 +531,21 @@ def _run_multi_agent_pipeline(
         report(context, "quality checks")
         final_report = assess_final_artifact(pending_pptx, output_dir / "quality_attempts" / artifact_hash(pending_pptx),
                                             ir1=ir1, ir2=repaired_ir2, caller=client,
-                                            judge_enabled=False, deep_verification=False)
+                                            judge_enabled=False, deep_verification=False,
+                                            force_accept=options.force_accept)
         check(context)
         ir2, candidate_path = repaired_ir2, pending_pptx
         if final_report.rendered.status == "FAILED_TO_RUN":
             raise ValueError("Repaired artifact could not be rendered; previous artifact retained: " + str(final_report.rendered.reason))
     check(context)
+    if final_report.readiness == "BLOCKED":
+        if options.force_accept and final_report.hard_failures:
+            # Opt-in degradation (FORCE_ACCEPT_QUALITY_ERRORS=true): export the
+            # deck anyway; bypassed failures stay recorded in the report.
+            print("[WARN] Quality gate bypassed: " + " | ".join(final_report.hard_failures))
+            final_report.warnings.extend(final_report.hard_failures)
+            final_report.hard_failures = []
+            final_report = resolve_readiness(final_report)
     if final_report.readiness == "BLOCKED":
         update_manifest(manifest_path, status="FAILED", quality_status=final_report.status,
                         readiness=final_report.readiness, rejected_artifact_hash=final_report.artifact_hash)

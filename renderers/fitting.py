@@ -95,6 +95,39 @@ def _set_font_size(obj: SceneObject, size: float) -> None:
     obj.style["font_size"] = int(size) if float(size).is_integer() else round(size, 1)
 
 
+def _ellipsize_to_fit(lines: list[str], measure) -> tuple[list[str], bool]:
+    """Last resort: shorten the longest line with '...' while that still helps.
+
+    Returns the (possibly shortened) lines and whether anything was truncated.
+    Cutting a line only reduces height when it removes a wrapped row, so the
+    loop stops as soon as shortening stops shrinking the block: a label whose
+    single line needs a taller box ships as written rather than as 'Encod......'.
+    Bounded so pathological content can never spin here.
+    """
+    out = list(lines)
+    for _ in range(24):
+        current = measure(out)
+        if current.fits:
+            return out, out != lines
+        index = max(range(len(out)), key=lambda i: len(out[i]))
+        stem = out[index][:-3] if out[index].endswith("...") else out[index]
+        if len(stem) <= 2:
+            return out, out != lines
+        candidate = list(out)
+        candidate[index] = stem[:max(1, int(len(stem) * 0.9) - 1)].rstrip() + "..."
+        if measure(candidate).needed_height_pt >= current.needed_height_pt:
+            return out, out != lines
+        out = candidate
+    return out, out != lines
+
+
+def _write_lines(obj: SceneObject, lines: list[str]) -> None:
+    if obj.kind == "text_group":
+        obj.content["lines"] = lines
+    else:
+        obj.content["text"] = "\n".join(lines)
+
+
 def _text_lines(content: dict[str, Any]) -> list[str]:
     lines = content.get("lines") or content.get("items") or content.get("bullets")
     if lines is None:
@@ -181,17 +214,37 @@ def _fit_plain_text(slide_id: str, obj: SceneObject, report: FitReport) -> None:
                     slide_id, obj.object_id, "font_scaled",
                     f"font -> {chosen:g}pt after pruning"))
                 break
-    if not result.fits and obj.kind == "shape":
-        # Diagram node: single label, cannot prune; hard-shrink to floor.
-        if chosen > floor:
-            _set_font_size(obj, floor)
+    if not result.fits:
+        # Graceful degradation: overflow must never crash the build or slip past the
+        # gate unexplained. Step the font down 10% at a time to the role floor, then
+        # ellipsize the longest line until the block measures inside its box.
+        before = chosen
+        while chosen > floor and not result.fits:
+            chosen = max(floor, round(chosen * 0.9, 1))
+            _set_font_size(obj, chosen)
+            result = measure(chosen, kept)
+        if chosen < before:
             report.adjustments.append(FitAdjustment(
                 slide_id, obj.object_id, "font_scaled",
-                f"diagram node text hard-shrunk to {floor:g}pt", "warning"))
-        else:
+                f"font {before:g}pt -> {chosen:g}pt in 10% steps to the {floor:g}pt floor"))
+    if not result.fits:
+        truncated, changed = _ellipsize_to_fit(kept, lambda texts: measure(chosen, texts))
+        if changed:
+            _write_lines(obj, truncated)
+            kept = truncated
+            result = measure(chosen, kept)
             report.adjustments.append(FitAdjustment(
-                slide_id, obj.object_id, "kept_overflow",
-                f"node text still exceeds box at {floor:g}pt", "warning"))
+                slide_id, obj.object_id, "text_truncated",
+                f"lines ellipsized to fit {result.available_height_pt:.0f}pt at {chosen:g}pt", "warning"))
+    if not result.fits:
+        # Residual overflow is now recorded for every kind, not only diagram nodes. A
+        # shape keeps the warning surface it already had; a heading or body block is
+        # information, because that box height belongs to the layout solver and the
+        # committed F13 tests pin the build-level warning contract for tight regions.
+        report.adjustments.append(FitAdjustment(
+            slide_id, obj.object_id, "kept_overflow",
+            f"content still exceeds box at {chosen:g}pt ({result.overflow_ratio:.0%})",
+            "warning" if obj.kind == "shape" else "info"))
 
 
 def _fit_list(slide_id: str, obj: SceneObject, report: FitReport) -> None:
@@ -263,6 +316,32 @@ def _fit_list(slide_id: str, obj: SceneObject, report: FitReport) -> None:
                     slide_id, obj.object_id, "font_scaled",
                     f"font -> {chosen:g}pt after pruning", "warning"))
                 break
+    if not result.fits:
+        before = chosen
+        while chosen > floor and not result.fits:
+            chosen = max(floor, round(chosen * 0.9, 1))
+            _set_font_size(obj, chosen)
+            result = measure(chosen, kept)
+        if chosen < before:
+            report.adjustments.append(FitAdjustment(
+                slide_id, obj.object_id, "font_scaled",
+                f"font {before:g}pt -> {chosen:g}pt in 10% steps to the {floor:g}pt floor", "warning"))
+    if not result.fits:
+        # Last resort before shipping an overflowing box: ellipsize the longest
+        # bullet. The loss is recorded so the quality report can explain the deck.
+        def rebuild(texts: list[str]) -> list[Any]:
+            return [{**item, "text": text} if isinstance(item, dict) else text
+                    for item, text in zip(kept, texts)]
+
+        truncated, changed = _ellipsize_to_fit([as_text(i) for i in kept],
+                                               lambda texts: measure(chosen, rebuild(texts)))
+        if changed:
+            kept = rebuild(truncated)
+            obj.content["items"] = kept
+            result = measure(chosen, kept)
+            report.adjustments.append(FitAdjustment(
+                slide_id, obj.object_id, "text_truncated",
+                f"bullets ellipsized to fit {result.available_height_pt:.0f}pt at {chosen:g}pt", "warning"))
     if not result.fits:
         report.adjustments.append(FitAdjustment(
             slide_id, obj.object_id, "kept_overflow",

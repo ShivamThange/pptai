@@ -62,6 +62,9 @@ def main():
                         help="Measure content and re-solve per-slide geometry dynamically (default)")
     parser.add_argument("--no-dynamic-layout", dest="dynamic_layout", action="store_false",
                         help="Use the fixed layout catalog geometry only")
+    parser.add_argument("--force-accept-quality-errors", dest="force_accept", action="store_true", default=False,
+                        help="Export the PPTX even if the deterministic quality gate reports hard failures "
+                             "(same as FORCE_ACCEPT_QUALITY_ERRORS=true)")
     parser.add_argument("--polish", choices=["off", "auto", "all"], default="off",
                         help="Optional deterministic plus rendered-slide quality audit for multi-agent decks")
     parser.add_argument("--gpu", action="store_true", help="Use CUDA for Docling only when PyTorch/CUDA are configured")
@@ -206,6 +209,7 @@ def main():
             use_gpu=args.gpu,
             theme=args.theme,
             dynamic_layout=args.dynamic_layout,
+            force_accept=args.force_accept or settings.force_accept_quality_errors,
         ),
         settings=settings, api_key=api_key, on_parsed=parsed_paths.append, **ingestion_args,
     )

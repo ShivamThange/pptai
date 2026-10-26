@@ -5,6 +5,8 @@ R01, R02, R03, R04, R05, R06, F01, F02, F07, F06, F08 and F13 are **VERIFIED wit
 
 Repository cleanup on 9 October 2026 makes multi-agent the sole supported CLI generation path. **246 tests pass**, with actual PowerPoint acceptance on both adapters; installed JS dependencies are removed after verification. `.pytest_cache` remains inaccessible. Feature statuses below are unchanged; see [the cleanup report](REPOSITORY_CLEANUP.md) and CURRENT_STATE for remaining tools/gaps and exact evidence. No promotion/merge was performed.
 
+Pipeline robustness / graceful-degradation work on 26 October 2026 is a cross-cutting working-tree repair, not a new module: it changes R01 retry expectations, R04 gate reporting, R05 stage failure handling and F13 fitting without altering any module's recorded scope or readiness. Evidence is the eight-test `tests/test_graceful_degradation.py`, each of which fails against a pristine `git archive HEAD` export. It does not promote R04 or F13, and the bypassable gate is opt-in (`force_accept`, default `False`) so the strict `PIPELINE_REJECTED` path is unchanged unless a caller asks for it. See CURRENT_STATE for the file-level list and the limits that remain (no live provider, no Node/PptxGenJS placeholder parity, no PowerPoint COM preview in this sandbox).
+
 | Module | Responsibility | Current capability | New implementation | Phase | Dependencies |
 |---|---|---|---|---|---|
 | [R01](modules/R01_llm_gateway_reliability.md) | LLM gateway and provider failure repair | Repaired gateway | VERIFIED (R01 scope) | 0 | — |

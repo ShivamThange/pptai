@@ -151,6 +151,7 @@ class LocalWorker:
             # `model` is provider configuration, already captured in provider_config;
             # the pipeline options know only about scopes, retries and rendering.
             options = MultiAgentOptions(layouts_path=str(self.settings.layouts_path), output_dir=deck["output_dir"],
+                                        force_accept=self.provider_settings.force_accept_quality_errors,
                                         **request.model_dump(exclude={"model"}))
             if len(captured) > 1:
                 members = [{**s, 'parse_root': self.settings.root / 'documents' / s['document_id']} for s in captured]

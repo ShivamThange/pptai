@@ -176,7 +176,7 @@ def attach_asset_candidates(storyboard: Storyboard, ir1: ValidatedIR1, layouts_s
                                 for chunk in owning:
                                     if chunk.chunk_id not in slide.chunk_refs:
                                         slide.chunk_refs.append(chunk.chunk_id)
-                break
+                    break
     return storyboard
 
 
@@ -287,7 +287,7 @@ VISUAL OBJECTS: prefer a predefined object over a plain text box when the conten
                     omitted.extend({'ref_id': u.unit_id, 'reason': 'recoverable_document_digest'} for u in units if u not in representatives)
                 payload['SOURCE_DATA']['ir1'] = {'document_title': ir1.document_title, 'units': [
                     {'unit_id': u.unit_id, 'kind': u.kind, 'title': u.title, 'summary': u.summary if u.priority == 'CRITICAL' else u.title,
-                     'priority': u.priority, 'section': u.section_path} for u in selected], 'assets': []}
+                     'priority': u.priority, 'section': u.section_path} for u in selected if u.validation_status == "VALIDATED"], 'assets': []}
                 payload['SOURCE_DATA']['chunks'] = parents
                 arguments['prompt'] = json.dumps(payload, ensure_ascii=False)
                 try:
@@ -324,6 +324,32 @@ VISUAL OBJECTS: prefer a predefined object over a plain text box when the conten
             validate_storyboard(result, chunks, ir1, layouts_spec, min_slides=min_slides, max_slides=max_slides)
             return result
         except ValueError as error:
+            if str(error) == 'Storyboard selects units absent from its supplied context':
+                # Step 5: one internal auto-repair for hallucinated unit IDs.
+                # A repeat of the identical call cannot help; the constraint
+                # prompt plus the stripped draft steer the model off the
+                # invented IDs instead.
+                draft = result if isinstance(result, Storyboard) else None
+                hallucinated = sorted({unit_id for slide in (draft.slides if draft is not None else [])
+                                       for unit_id in slide.source_unit_ids if unit_id not in supplied_units}) if draft is not None else []
+                if draft is not None and hallucinated and attempt < max(0, max_repairs):
+                    stripped = Storyboard.model_validate(draft.model_dump())
+                    for slide in stripped.slides:
+                        slide.source_unit_ids = [unit_id for unit_id in slide.source_unit_ids
+                                                 if unit_id not in hallucinated]
+                        if not slide.source_unit_ids:
+                            # SlidePlan requires at least one bound unit; keep the
+                            # slide valid with a real catalog unit and its chunks.
+                            fallback = sorted(supplied_units)[0]
+                            slide.source_unit_ids = [fallback]
+                            for chunk in chunks:
+                                if fallback in chunk.unit_ids and chunk.chunk_id not in slide.chunk_refs:
+                                    slide.chunk_refs.append(chunk.chunk_id)
+                    payload["validation_errors"] = [
+                        f"Your previous output contained hallucinated unit IDs: {', '.join(hallucinated)}. "
+                        "You MUST ONLY use unit IDs from the provided catalog. Repair the storyboard now."]
+                    payload["previous_storyboard"] = stripped.model_dump()
+                    continue
             if attempt == max(0, max_repairs):
                 raise
             payload["validation_errors"] = [str(error)]

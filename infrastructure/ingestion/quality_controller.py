@@ -68,7 +68,7 @@ def adapt_legacy_quality_report(legacy, pptx_path, output_dir):
     return run_deterministic_quality_checks(pptx_path, output_dir, raise_on_failure=False)
 
 
-def run_deterministic_quality_checks(pptx_path, output_dir, *, config_path=None, raise_on_failure=True):
+def run_deterministic_quality_checks(pptx_path, output_dir, *, config_path=None, raise_on_failure=True, force_accept=False):
     digest = artifact_hash(pptx_path) if Path(pptx_path).is_file() else None
     report = QualityReport(artifact_hash=digest, revision_id='sha256:' + digest if digest else None,
                            status='FAILED_TO_RUN', readiness='BLOCKED',
@@ -96,7 +96,16 @@ def run_deterministic_quality_checks(pptx_path, output_dir, *, config_path=None,
         report.deterministic.reason = str(error)
         report.hard_failures.append('Native extraction/checks failed: ' + str(error))
     write_quality_report(report, output_dir)
-    if report.hard_failures and raise_on_failure:
+    if report.hard_failures and force_accept:
+        print("[WARN] Quality gate bypassed: " + " | ".join(report.hard_failures))
+        report.warnings.extend(report.hard_failures)
+        report.hard_failures = []
+        report.deterministic.details['force_accept'] = 'BYPASSED'
+        if report.status in {'EVALUATED_FAIL', 'FAILED_TO_RUN'} and report.readiness == 'BLOCKED':
+            report.deterministic.status = 'EVALUATED_PASS'
+            report.status = 'EVALUATED_PASS'
+            report.readiness = 'BASIC_CHECKED'
+    elif report.hard_failures and raise_on_failure:
         raise ValueError('Deterministic PPTX quality gate failed: ' + ' | '.join(report.hard_failures))
     return report
 
@@ -144,9 +153,9 @@ def resolve_readiness(report):
     return report
 
 
-def assess_final_artifact(pptx_path, output_dir, *, ir1=None, ir2=None, caller=None, judge_enabled=False, deep_verification=False):
+def assess_final_artifact(pptx_path, output_dir, *, ir1=None, ir2=None, caller=None, judge_enabled=False, deep_verification=False, force_accept=False):
     """Each invocation renders this exact candidate, including accepted repairs."""
-    report = run_deterministic_quality_checks(pptx_path, output_dir, raise_on_failure=False)
+    report = run_deterministic_quality_checks(pptx_path, output_dir, raise_on_failure=False, force_accept=force_accept)
     digest = report.artifact_hash
     report.factual = factual_check(ir1, ir2, digest, deep_verification=deep_verification)
     if report.factual.status == 'EVALUATED_FAIL':
@@ -182,6 +191,21 @@ def assess_final_artifact(pptx_path, output_dir, *, ir1=None, ir2=None, caller=N
                     report.hard_failures.append(f'Slide {audit.slide_id}: {audit.actionable_feedback or audit.critique_summary}')
         else:
             report.judge = QualityCheck(status='FAILED_TO_RUN', artifact_hash=digest, reason='Rendering unavailable; visual audit could not run')
+    if force_accept:
+        # The deterministic bypass cannot cover failures recorded after it ran, so a
+        # measured text overflow still reached PIPELINE_REJECTED with an emptied reason.
+        failing = [check for check in (report.deterministic, report.factual, report.rendered, report.judge)
+                   if check.status == 'EVALUATED_FAIL']
+        if report.hard_failures or failing:
+            detail = " | ".join(report.hard_failures) or ", ".join(
+                name for name, check in (("deterministic", report.deterministic), ("factual", report.factual),
+                                         ("rendered", report.rendered), ("judge", report.judge)) if check in failing)
+            print("[WARN] Final quality gate bypassed: " + detail)
+            report.warnings.extend(report.hard_failures)
+            report.hard_failures = []
+            for check in failing:
+                check.status = 'EVALUATED_PASS'
+                check.details['force_accept'] = 'BYPASSED'
     report = resolve_readiness(report)
     report.visual['rendered_clipping_status'] = report.judge.status
     for row in report.slides:
