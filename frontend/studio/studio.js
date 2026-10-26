@@ -11,11 +11,13 @@ const el = (tag, cls, text) => {
 
 const state = {
   formats: null, config: null,
-  docs: new Map(),      // document_id -> {view, status, parseJobId, findings[]}
-  jobs: new Map(),      // job_id -> {row, es, poll, terminal}
+  docs: new Map(),      // document_id -> {view, status, parseJobId, findings[], removed}
+  jobs: new Map(),      // job_id -> {card, es, poll, terminal, status, kind}
   decks: [],
   selectedDeck: null,
   uploading: false,
+  decksLoading: false,
+  decksError: false,
 };
 
 /* ---------------- API helper ---------------- */
@@ -51,7 +53,7 @@ async function pollWorker() {
   try {
     const status = await api('/api/worker/status');
     const pill = $('worker-pill');
-    pill.className = `pill state-${status.state}`;
+    pill.className = `status-pill state-${status.state}`;
     const labels = { alive: 'worker online', busy: 'worker busy', stale: 'worker stale — restart it', offline: 'worker offline' };
     $('worker-state').textContent = labels[status.state] || status.state;
     pill.title = status.age_seconds !== null ? `heartbeat ${status.age_seconds}s ago (pid ${status.pid ?? '?'})` : 'no heartbeat yet';
@@ -62,10 +64,13 @@ async function loadConfig() {
   try {
     state.config = await api('/api/config');
     const chip = $('model-chip');
-    chip.textContent = `${state.config.provider} · ${state.config.model} · ${state.config.max_calls_per_minute}/min · out ${state.config.max_output_tokens} tok`;
-    chip.title = `strict coverage: ${state.config.strict_section_coverage ? 'on' : 'off'} · concurrency ${state.config.max_concurrency}`;
-    chip.classList.toggle('nokey', !state.config.api_key_present);
-    if (!state.config.api_key_present) chip.title += ' · API key missing';
+    const c = state.config;
+    let text = `${c.provider} · ${c.model} · ${c.max_calls_per_minute}/min · out ${c.max_output_tokens} tok`;
+    if (c.context_tokens) text += ` · ctx ${c.context_tokens}`;
+    chip.textContent = text;
+    chip.title = `strict coverage: ${c.strict_section_coverage ? 'on' : 'off'} · concurrency ${c.max_concurrency}`;
+    chip.classList.toggle('nokey', !c.api_key_present);
+    if (!c.api_key_present) chip.title += ' · API key missing';
     populateThemes();
   } catch (error) { $('model-chip').textContent = 'config unavailable'; }
 }
@@ -91,7 +96,58 @@ async function loadFormats() {
     $('formats-hint').textContent = ok.length ? `supported: ${ok.join(', ')}` : 'no format adapters installed';
     const accept = state.formats.formats.flatMap(f => f.extensions).join(',');
     $('file-input').accept = accept;
+    if (ok.length) $('dz-formats').textContent = ok.join(', ');
   } catch { $('formats-hint').textContent = 'format check failed'; }
+}
+
+/* ---------------- stage rail ---------------- */
+/* Communicates real client state only — no fabricated progress. */
+function updateStages() {
+  const docs = [...state.docs.values()];
+  const parsed = docs.filter(d => d.status === 'parsed').length;
+  const inFlight = docs.filter(d => d.status === 'uploading' || d.status === 'parsing').length;
+  const failedDocs = docs.filter(d => d.status === 'failed').length;
+  const jobs = [...state.jobs.values()];
+  const genJobs = jobs.filter(j => j.kind === 'generate');
+  const activeJobs = jobs.filter(j => !j.terminal).length;
+  const doneGen = genJobs.filter(j => j.terminal && j.status === 'completed').length;
+  const failedJobs = jobs.filter(j => j.terminal && j.status === 'failed').length;
+
+  const setStage = (id, { current = false, done = false, num, note }) => {
+    const li = $(id);
+    if (!li) return;
+    li.classList.toggle('is-current', current);
+    li.classList.toggle('is-done', done);
+    if (current) li.setAttribute('aria-current', 'step');
+    else li.removeAttribute('aria-current');
+    const numEl = li.querySelector('.stage-num');
+    if (numEl) numEl.textContent = done ? '\u2713' : num;
+    const noteEl = li.querySelector('.stage-note');
+    if (noteEl && note !== undefined) noteEl.textContent = note;
+  };
+
+  let sourceNote;
+  if (parsed) sourceNote = inFlight ? `${parsed} parsed · ${inFlight} in flight` : `${parsed} parsed source${parsed > 1 ? 's' : ''}`;
+  else if (inFlight) sourceNote = `${inFlight} file${inFlight > 1 ? 's' : ''} uploading / parsing…`;
+  else if (failedDocs) sourceNote = 'upload failed — check the row for details';
+  else sourceNote = 'select and parse a document';
+  setStage('stage-source', { current: parsed === 0, done: parsed > 0, num: '01', note: sourceNote });
+
+  const configureDone = genJobs.length > 0;
+  let configureNote;
+  if (configureDone) configureNote = doneGen ? 'settings submitted — deck generated' : 'settings submitted';
+  else if (parsed) configureNote = 'ready — generate when configured';
+  else configureNote = 'narrative, extraction, visuals, limits';
+  setStage('stage-configure', { current: parsed > 0 && !configureDone, done: configureDone, num: '02', note: configureNote });
+
+  let reviewNote;
+  const parts = [];
+  if (activeJobs) parts.push(`${activeJobs} active`);
+  if (failedJobs) parts.push(`${failedJobs} failed`);
+  if (!parts.length && doneGen) parts.push(`${doneGen} completed`);
+  if (!parts.length && state.decks.length) parts.push(`${state.decks.length} deck${state.decks.length > 1 ? 's' : ''}`);
+  reviewNote = parts.length ? parts.join(' · ') : 'jobs, decks and exports';
+  setStage('stage-review', { current: jobs.length > 0, done: doneGen > 0, num: '03', note: reviewNote });
 }
 
 /* ---------------- upload + parse ---------------- */
@@ -105,35 +161,77 @@ function fmtBytes(n) {
   return n + ' B';
 }
 
+const DOC_LABELS = { uploading: 'uploading', parsing: 'parsing', parsed: 'parsed', failed: 'failed' };
+
 function renderDoc(entry) {
   const row = entry.row;
   row.replaceChildren();
-  const thumb = el('div', 'thumb', extLabel(entry.view.filename));
-  const meta = el('div', 'meta');
-  meta.append(el('div', 'name', entry.view.filename));
-  const sub = el('div', 'sub');
+  row.className = `doc status-${entry.status}`;
+
+  const ext = el('span', 'doc-ext', extLabel(entry.view.filename));
+  ext.title = 'file type';
+
+  const info = el('div', 'doc-info');
+  info.append(el('span', 'doc-name', entry.view.filename));
+  const metaBits = [];
+  if (typeof entry.view.size_bytes === 'number') metaBits.push(fmtBytes(entry.view.size_bytes));
   const detected = entry.view.upload && entry.view.upload.detected_type;
-  sub.append(`uploaded · ${fmtBytes(entry.view.size_bytes)}`);
-  if (detected) sub.append(' · type ', el('code', undefined, detected));
-  meta.append(sub);
-  const actions = el('div', 'actions');
-  const tag = el('span', `status-tag ${entry.status}`, entry.status);
-  actions.append(tag);
-  row.append(thumb, meta, actions);
+  if (detected) metaBits.push(`type ${detected}`);
+  info.append(el('span', 'doc-meta', metaBits.join(' · ')));
+
+  const status = el('span', 'doc-status');
+  if (entry.status === 'uploading' || entry.status === 'parsing') {
+    const spinner = el('span', 'spinner');
+    spinner.setAttribute('aria-hidden', 'true');
+    status.append(spinner, el('span', 'status-text', DOC_LABELS[entry.status]));
+  } else {
+    const mark = el('span', 'status-mark', entry.status === 'parsed' ? '\u2713' : '\u2715');
+    status.append(mark, el('span', 'status-text', DOC_LABELS[entry.status]));
+  }
+
+  const remove = el('button', 'doc-remove', '\u00d7');
+  remove.type = 'button';
+  remove.setAttribute('aria-label', `Remove ${entry.view.filename} from the source set`);
+  remove.title = 'Remove from this source set (the upload itself is kept server-side)';
+  remove.onclick = () => {
+    entry.removed = true;
+    if (entry.view.id && state.docs.has(entry.view.id)) state.docs.delete(entry.view.id);
+    row.remove();
+    updateGenerateButton();
+  };
+
+  row.append(ext, info, status, remove);
   if (entry.findings && entry.findings.length) {
-    const note = el('div', 'doc-findings', entry.findings.join(' · '));
+    const note = el('div', 'doc-findings');
+    note.textContent = entry.findings.join(' · ');
     row.append(note);
   }
   updateGenerateButton();
 }
 
 async function uploadFiles(files) {
-  for (const file of files) {
-    await uploadOne(file);
+  state.uploading = true;
+  updateGenerateButton();
+  try {
+    for (const file of files) {
+      await uploadOne(file);
+    }
+  } finally {
+    state.uploading = false;
+    updateGenerateButton();
   }
 }
 
 async function uploadOne(file) {
+  // Optimistic row: shows the upload state before the first response arrives.
+  const entry = {
+    view: { filename: file.name, size_bytes: file.size, upload: null, id: null },
+    status: 'uploading', parseJobId: null, findings: [], removed: false,
+    row: el('li', 'doc'),
+  };
+  $('doc-list').prepend(entry.row);
+  renderDoc(entry);
+
   const form = new FormData();
   form.append('file', file);
   form.append('selected_type', 'auto');
@@ -141,13 +239,20 @@ async function uploadOne(file) {
   try {
     view = await api('/api/documents', { method: 'POST', body: form });
   } catch (error) {
+    if (entry.removed) return;
+    entry.status = 'failed';
+    entry.findings.push(`upload failed: ${error.message}`);
+    renderDoc(entry);
     toast(`Upload failed: ${error.message}`, 'error');
+    updateStages();
     return;
   }
-  const entry = { view, status: 'parsing', parseJobId: null, findings: [], row: el('li', 'doc') };
+  if (entry.removed) return; // removed while the request was in flight
+  entry.view = view;
+  entry.status = 'parsing';
   state.docs.set(view.id, entry);
-  $('doc-list').prepend(entry.row);
   renderDoc(entry);
+  updateStages();
   try {
     const submitted = await api(`/api/documents/${view.id}/parse`, { method: 'POST', ...jsonBody({}) });
     entry.parseJobId = submitted.job_id;
@@ -157,6 +262,7 @@ async function uploadOne(file) {
     entry.findings.push(error.message);
     renderDoc(entry);
     toast(`Parse submission failed: ${error.message}`);
+    updateStages();
   }
 }
 
@@ -177,6 +283,7 @@ function onParseUpdate(docId, job) {
     entry.findings.push('parse cancelled');
   }
   renderDoc(entry);
+  updateStages();
 }
 
 function parsedDocs() {
@@ -188,12 +295,13 @@ function updateGenerateButton() {
   const ready = count > 0;
   $('generate').disabled = !ready || state.uploading;
   if ($('resume-generate')) $('resume-generate').disabled = !ready || state.uploading;
-  $('generate-sub').textContent = ready
-    ? `${count} parsed source${count > 1 ? 's' : ''} ready`
-    : 'upload and parse a source first';
+  $('generate-sub').textContent = state.uploading
+    ? 'waiting for uploads to finish'
+    : (ready ? `${count} parsed source${count > 1 ? 's' : ''} ready` : 'upload and parse a source first');
   if ($('resume-sub')) {
     $('resume-sub').textContent = ready ? 'reuse cache / checkpoints' : 'upload a source first';
   }
+  updateStages();
 }
 
 /* ---------------- generation ---------------- */
@@ -233,6 +341,7 @@ async function generate(options = {}) {
   } catch (error) {
     toast(`Could not queue generation: ${error.message}`);
   }
+  updateStages();
 }
 
 async function resumeDeck(deckId) {
@@ -268,62 +377,112 @@ const STAGE_LABELS = {
   publication: 'Publishing revision',
 };
 
+const JOB_LABELS = { queued: 'queued', running: 'running', completed: 'completed', failed: 'failed', cancelled: 'cancelled' };
+const JOB_MARKS = { queued: '\u25cb', running: '\u25d0', completed: '\u2713', failed: '\u2715', cancelled: '\u2013' };
+
 function jobRow(job, kindLabel) {
-  const row = el('div', 'job');
-  const title = el('div', 'jtitle');
-  title.append(el('span', 'kind', kindLabel || job.kind), el('span', 'jid', job.id.slice(0, 10)));
-  const stage = el('div', 'jstage');
-  const right = el('div', 'jlink');
-  row.append(title, stage, right);
-  const track = el('div', 'progress-track');
-  const fill = el('div', 'progress-fill');
-  track.append(fill);
-  row.append(track);
-  return { row, stage, right, fill };
+  const row = el('article', 'job');
+  const head = el('div', 'job-head');
+  const kind = el('span', 'job-kind', kindLabel || job.kind || 'job');
+  const id = el('span', 'job-id', (job.id || '').slice(0, 10));
+  const statusWrap = el('span', 'job-status');
+  const actions = el('span', 'job-actions');
+  head.append(kind, id, statusWrap, actions);
+  const stage = el('div', 'job-stage');
+  const progress = el('div', 'job-progress');
+  progress.hidden = true;
+  row.append(head, stage, progress);
+  return { row, head, kind, id, statusWrap, actions, stage, progress };
 }
 
 function drawJob(card, job) {
-  const labels = { queued: 'queued', running: '', completed: 'done', failed: 'failed', cancelled: 'cancelled' };
-  card.row.classList.toggle('done', job.status === 'completed');
-  card.row.classList.toggle('failed', job.status === 'failed');
-  const running = job.status === 'running' || job.status === 'queued';
-  if (running) {
-    const spinner = el('span', 'spinner');
-    const label = el('span', undefined, `${STAGE_LABELS[job.stage] || job.stage || 'waiting for worker'}…`);
-    card.stage.replaceChildren(spinner, label);
-  } else {
-    card.stage.textContent = labels[job.status] || job.status;
-  }
-  const progress = job.progress || {};
-  let fraction = 0;
-  if (progress.total) fraction = Math.min(1, (progress.completed || 0) / progress.total);
-  else if (job.status === 'completed') fraction = 1;
-  card.fill.style.width = `${Math.round(fraction * 100)}%`;
+  card.row.dataset.status = job.status;
 
-  card.right.replaceChildren();
-  if (job.status === 'running' || job.status === 'queued') {
-    const cancel = el('button', 'cancel', 'cancel');
-    cancel.onclick = () => api(`/api/jobs/${job.id}/cancel`, { method: 'POST' }).catch(e => toast(e.message));
-    card.right.append(cancel);
+  /* status: mark + text, never color alone */
+  card.statusWrap.replaceChildren();
+  const mark = el('span', 'status-mark', JOB_MARKS[job.status] ?? '\u00b7');
+  if (job.status === 'running') {
+    mark.textContent = '';
+    mark.className = 'status-mark spinner';
+    mark.setAttribute('aria-hidden', 'true');
+  }
+  card.statusWrap.append(mark, el('span', 'status-text', JOB_LABELS[job.status] || job.status));
+
+  /* stage line */
+  if (job.status === 'running') {
+    const spinner = el('span', 'spinner');
+    spinner.setAttribute('aria-hidden', 'true');
+    card.stage.replaceChildren(spinner, el('span', undefined, `${STAGE_LABELS[job.stage] || job.stage || 'running'}…`));
+  } else if (job.status === 'queued') {
+    card.stage.textContent = job.cancel_requested
+      ? 'cancellation requested — waiting for worker'
+      : 'waiting for an available worker';
+  } else {
+    const doneWord = job.status === 'completed' ? 'finished' : JOB_LABELS[job.status];
+    card.stage.textContent = job.stage ? `${STAGE_LABELS[job.stage] || job.stage} — ${doneWord}` : doneWord;
+  }
+
+  /* progress: determinate bar only when the backend reports a trustworthy total */
+  const progress = job.progress || {};
+  const total = typeof progress.total === 'number' && progress.total > 0 ? progress.total : 0;
+  if (total && (job.status === 'running' || job.status === 'completed')) {
+    const completed = typeof progress.completed === 'number'
+      ? Math.max(0, Math.min(progress.completed, total)) : 0;
+    card.progress.hidden = false;
+    card.progress.replaceChildren();
+    const track = el('div', 'progress-track');
+    const fill = el('div', 'progress-fill');
+    fill.style.width = job.status === 'completed' ? '100%' : `${Math.round((completed / total) * 100)}%`;
+    track.append(fill);
+    card.progress.append(track, el('span', 'progress-num', job.status === 'completed' ? `${total}/${total}` : `${completed}/${total}`));
+  } else {
+    card.progress.hidden = true;
+  }
+
+  /* actions */
+  card.actions.replaceChildren();
+  if ((job.status === 'running' || job.status === 'queued') && !job.cancel_requested) {
+    const cancel = el('button', 'btn-mini danger', 'cancel');
+    cancel.type = 'button';
+    cancel.onclick = async () => {
+      cancel.disabled = true;
+      cancel.textContent = 'cancelling…';
+      try { await api(`/api/jobs/${job.id}/cancel`, { method: 'POST' }); }
+      catch (e) { cancel.disabled = false; cancel.textContent = 'cancel'; toast(e.message); }
+    };
+    card.actions.append(cancel);
+  } else if ((job.status === 'running' || job.status === 'queued') && job.cancel_requested) {
+    card.actions.append(el('span', 'job-cancel-note', 'cancelling'));
   }
   const isDeckJob = (job.kind === 'generate') || Boolean(job.deck_id);
   if (isDeckJob && ['failed', 'cancelled', 'completed'].includes(job.status)) {
-    const resumeBtn = el('button', 'resume-btn', '⚡ resume');
+    const resumeBtn = el('button', 'btn-mini accent', 'resume');
+    resumeBtn.type = 'button';
     resumeBtn.title = 'Resume this deck generation task from checkpoints';
     resumeBtn.onclick = () => resumeDeckJob(job);
-    card.right.append(resumeBtn);
+    card.actions.append(resumeBtn);
   }
   if (job.status === 'completed' && job.result && job.result.deck_id) {
-    const open = el('a', undefined, 'view deck');
+    const open = el('a', 'btn-mini accent', 'view deck');
     open.href = '#';
     open.onclick = (event) => { event.preventDefault(); openDeck(job.result.deck_id); };
-    card.right.append(open);
+    card.actions.append(open);
   }
-  let errorNode = card.row.querySelector('.jerr');
+
+  /* expandable error details */
+  let errBox = card.row.querySelector('.job-error');
   if (job.error && job.error.message) {
-    if (!errorNode) { errorNode = el('div', 'jerr'); card.row.append(errorNode); }
-    errorNode.textContent = `${job.error.code || 'ERROR'}: ${job.error.message}`;
-  } else if (errorNode) errorNode.remove();
+    if (!errBox) { errBox = el('details', 'job-error'); card.row.append(errBox); }
+    const summary = el('summary');
+    summary.append(
+      el('span', 'err-mark', '\u2715'),
+      el('span', 'err-code', job.error.code || 'ERROR'),
+      el('span', 'err-short', job.error.message),
+    );
+    summary.title = job.error.message;
+    const full = el('pre', 'err-full', `${job.error.code || 'ERROR'}: ${job.error.message}${job.error.stage ? `\nstage: ${job.error.stage}` : ''}`);
+    errBox.replaceChildren(summary, full);
+  } else if (errBox) errBox.remove();
 }
 
 function followJob(submitted, opts = {}) {
@@ -331,29 +490,33 @@ function followJob(submitted, opts = {}) {
   if (!jobId || state.jobs.has(jobId)) return;
   // Normalize: API submissions use job_id; job records use id.
   submitted = { ...submitted, id: jobId, job_id: jobId };
-  const card = jobRow({ ...submitted, kind: opts.kindLabel || submitted.kind || 'job' });
-  state.jobs.set(jobId, { card, terminal: false });
+  const kind = opts.kindLabel || submitted.kind || 'job';
+  const card = jobRow({ ...submitted, kind });
+  state.jobs.set(jobId, { card, terminal: false, status: submitted.status || 'queued', kind });
   const container = $('jobs');
-  container.querySelector('.empty')?.remove();
+  container.querySelector('.empty-state')?.remove();
   container.prepend(card.row);
   drawJob(card, submitted);
+  updateStages();
 
   const finish = (job) => {
     drawJob(card, job);
     if (['completed', 'failed', 'cancelled'].includes(job.status)) {
       const tracked = state.jobs.get(job.id || jobId);
-      if (tracked) tracked.terminal = true;
+      if (tracked) { tracked.terminal = true; tracked.status = job.status; }
       if (job.es) job.es.close();
       if (job.poll) clearInterval(job.poll);
       if (opts.docId) onParseUpdate(opts.docId, job);
       if (job.status === 'completed' && job.result && job.result.deck_id) refreshDecks().then(() => openDeck(job.result.deck_id));
       if (job.status === 'failed') toast(`Job failed: ${(job.error && job.error.message) || 'unknown error'}`);
+      updateStages();
     }
   };
 
   const handle = (job) => {
     const tracked = state.jobs.get(job.id || jobId);
     if (tracked && tracked.terminal) return;
+    if (tracked) tracked.status = job.status;
     finish(job);
   };
 
@@ -390,26 +553,65 @@ async function resumeInProgress() {
 
 /* ---------------- decks ---------------- */
 async function refreshDecks() {
+  if (state.decksLoading) return;
+  state.decksLoading = true;
+  state.decksError = false;
+  renderDeckList();
   try {
     state.decks = await api('/api/decks');
+  } catch (error) {
+    state.decksError = true;
+    state.decks = [];
+  } finally {
+    state.decksLoading = false;
     renderDeckList();
-  } catch { /* ignore */ }
+    updateStages();
+  }
 }
 
 function renderDeckList() {
   const container = $('decks');
   container.replaceChildren();
-  if (!state.decks.length) {
-    container.append(el('div', 'empty', 'No decks yet.'));
+
+  if (state.decksLoading) {
+    container.setAttribute('aria-busy', 'true');
+    for (let i = 0; i < 3; i += 1) container.append(el('div', 'skeleton-row'));
     return;
   }
+  container.removeAttribute('aria-busy');
+
+  if (state.decksError) {
+    const box = el('div', 'empty-state is-error');
+    box.append(
+      el('p', 'empty-title', 'Could not load decks'),
+      el('p', 'empty-sub', 'Check the API connection, then press Refresh.'),
+    );
+    container.append(box);
+    return;
+  }
+
+  if (!state.decks.length) {
+    const box = el('div', 'empty-state');
+    box.append(
+      el('p', 'empty-title', 'No decks yet'),
+      el('p', 'empty-sub', 'Generated decks are published here with revisions, checks and downloads.'),
+    );
+    container.append(box);
+    return;
+  }
+
   for (const deck of state.decks) {
-    const row = el('div', 'deck' + (deck.id === state.selectedDeck ? ' selected' : ''));
-    const name = el('div', 'dname', deck.filename || `deck ${deck.id.slice(0, 8)}`);
-    const sub = el('div', 'dsub', `${deck.id.slice(0, 12)}… · ${new Date(deck.created_at).toLocaleString()}`);
-    const rev = el('span', `rev-tag${deck.active_revision ? '' : ' none'}`,
-      deck.active_revision ? `rev ${deck.active_revision.slice(0, 8)}` : 'no revision');
-    row.append(name, sub, rev);
+    const row = el('button', `deck-row${deck.id === state.selectedDeck ? ' selected' : ''}`);
+    row.type = 'button';
+    const name = el('span', 'deck-name', deck.filename || `deck ${deck.id.slice(0, 8)}`);
+    const when = new Date(deck.created_at);
+    const time = Number.isNaN(when.getTime()) ? '' : ` · ${when.toLocaleString()}`;
+    const meta = el('span', 'deck-meta',
+      `${deck.active_revision ? `rev ${deck.active_revision.slice(0, 8)}` : 'no revision yet'}${time}`);
+    const stateLabel = el('span', `deck-state${deck.active_revision ? '' : ' none'}`,
+      deck.active_revision ? 'published' : 'pending');
+    row.append(name, meta, stateLabel);
+    row.setAttribute('aria-label', `Open deck ${deck.filename || deck.id}`);
     row.onclick = () => openDeck(deck.id);
     container.append(row);
   }
@@ -420,64 +622,96 @@ async function openDeck(deckId) {
   renderDeckList();
   const detail = $('deck-detail');
   detail.hidden = false;
-  detail.replaceChildren(el('div', 'empty', 'loading deck…'));
+  detail.replaceChildren();
+  const loading = el('div', 'detail-loading');
+  loading.append(el('span', 'spinner'), el('span', undefined, 'Loading deck…'));
+  detail.append(loading);
   let deck;
   try {
     deck = await api(`/api/decks/${deckId}`);
   } catch (error) {
-    detail.replaceChildren(el('div', 'jerr', `Could not load deck: ${error.message}`));
+    detail.replaceChildren(el('p', 'detail-error', `Could not load deck: ${error.message}`));
     return;
   }
   detail.replaceChildren();
   const active = deck.active_revision;
-  const head = el('div', 'dd-head');
-  head.append(el('div', 'dd-title', (deck.sources[0] && deck.sources[0].filename) || `Deck ${deckId.slice(0, 8)}`));
-  head.append(el('div', 'dd-meta', `${(active && active.previews || []).length} slides · ${active ? active.operation : '—'} · ${active ? new Date(active.created_at).toLocaleString() : ''}`));
+
+  const head = el('div', 'detail-head');
+  head.append(
+    el('h3', 'detail-title', (deck.sources[0] && deck.sources[0].filename) || `Deck ${deckId.slice(0, 8)}`),
+    el('div', 'detail-meta', `deck ${deckId.slice(0, 12)} · created ${new Date(deck.created_at).toLocaleString()}`),
+  );
   detail.append(head);
+
   if (!active) {
-    const emptyNotice = el('div', 'empty', 'This deck has no published revision yet (job still running or failed).');
-    const actions = el('div', 'dd-actions');
-    const resumeBtn = el('button', undefined, '⚡ Resume generation');
+    detail.append(el('p', 'notice', 'This deck has no published revision yet — its job may still be running or failed.'));
+    const actions = el('div', 'detail-actions');
+    const resumeBtn = el('button', undefined, 'Resume generation');
+    resumeBtn.type = 'button';
     resumeBtn.title = 'Resume deck generation with cache checkpoints';
     resumeBtn.onclick = () => resumeDeck(deckId);
     actions.append(resumeBtn);
-    detail.append(emptyNotice, actions);
+    detail.append(actions);
     return;
   }
-  const actions = el('div', 'dd-actions');
-  const download = el('a', undefined, '⬇ Download .pptx');
+
+  const actions = el('div', 'detail-actions');
+  const download = el('a', undefined, 'Download .pptx');
   download.href = active.pptx_url;
-  const resumeBtn = el('button', undefined, '⚡ Resume generation');
+  download.setAttribute('download', '');
+  const resumeBtn = el('button', undefined, 'Resume generation');
+  resumeBtn.type = 'button';
   resumeBtn.title = 'Resume or re-run deck generation reusing cached checkpoints';
   resumeBtn.onclick = () => resumeDeck(deckId);
   actions.append(download, resumeBtn);
   detail.append(actions);
 
   const checks = el('div', 'checks');
-  const label = { PASSED: ['ok', '✓'], EVALUATED_PASS: ['ok', '✓'], FAILED_TO_RUN: ['bad', '✕'], EVALUATED_FAIL: ['bad', '✕'], NOT_EVALUATED: ['', '–'], PARTIAL: ['warn', '!'] };
+  const checkMarks = {
+    PASSED: ['ok', '\u2713'], EVALUATED_PASS: ['ok', '\u2713'],
+    FAILED_TO_RUN: ['bad', '\u2715'], EVALUATED_FAIL: ['bad', '\u2715'],
+    PARTIAL: ['warn', '!'], NOT_EVALUATED: ['none', '\u2013'],
+  };
   for (const [name, status] of Object.entries(active.checks || {})) {
-    const [cls, mark] = label[status] || ['', '·'];
-    checks.append(el('span', `check-pill ${cls}`, `${mark} ${name}: ${status}`));
+    const [cls, glyph] = checkMarks[status] || ['none', '\u00b7'];
+    const row = el('div', 'check-row');
+    row.append(
+      el('span', `mark ${cls}`, glyph),
+      el('span', 'check-name', name),
+      el('span', 'check-status', status),
+    );
+    checks.append(row);
   }
-  checks.append(el('span', `check-pill ${active.readiness === 'PASSED' ? 'ok' : 'warn'}`, `readiness: ${active.readiness}`));
+  const readinessRow = el('div', 'check-row');
+  const readinessCls = active.readiness === 'PASSED' ? 'ok' : 'warn';
+  readinessRow.append(
+    el('span', `mark ${readinessCls}`, readinessCls === 'ok' ? '\u2713' : '!'),
+    el('span', 'check-name', 'readiness'),
+    el('span', 'check-status', active.readiness),
+  );
+  checks.append(readinessRow);
   detail.append(checks);
+
+  if (active.missing_checks && active.missing_checks.length) {
+    detail.append(el('p', 'missing-checks', `Missing checks: ${active.missing_checks.join(', ')}`));
+  }
 
   if (active.previews && active.previews.length) {
     const grid = el('div', 'preview-grid');
     for (const preview of active.previews) {
-      const card = el('div', 'slide-card');
+      const slideCard = el('div', 'slide-card');
       const img = el('img');
       img.loading = 'lazy';
       img.src = preview.url;
       img.alt = `Slide ${preview.slide} preview`;
       const cap = el('div', 'cap');
       cap.append(el('span', undefined, `slide ${preview.slide}`), el('span', undefined, 'rendered'));
-      card.append(img, cap);
-      grid.append(card);
+      slideCard.append(img, cap);
+      grid.append(slideCard);
     }
     detail.append(grid);
   } else {
-    detail.append(el('div', 'empty', 'No rendered previews available for this revision (rendering may have been unavailable on this machine).'));
+    detail.append(el('p', 'notice', 'No rendered previews available for this revision (rendering may have been unavailable on this machine).'));
   }
 }
 
@@ -486,13 +720,13 @@ function wireUpload() {
   const zone = $('dropzone');
   const input = $('file-input');
   zone.onclick = () => input.click();
-  zone.onkeydown = (event) => { if (event.key === 'Enter' || event.key === ' ') input.click(); };
+  zone.onkeydown = (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); input.click(); } };
   input.onchange = () => { uploadFiles([...input.files]); input.value = ''; };
   ['dragenter', 'dragover'].forEach(name => zone.addEventListener(name, (event) => {
-    event.preventDefault(); zone.classList.add('dragging');
+    event.preventDefault(); event.stopPropagation(); zone.classList.add('dragging');
   }));
   ['dragleave', 'drop'].forEach(name => zone.addEventListener(name, (event) => {
-    event.preventDefault(); zone.classList.remove('dragging');
+    event.preventDefault(); event.stopPropagation(); zone.classList.remove('dragging');
   }));
   zone.addEventListener('drop', (event) => {
     const files = [...event.dataTransfer.files];
@@ -525,6 +759,7 @@ async function init() {
   refreshDecks();
   resumeInProgress();
   updateGenerateButton();
+  updateStages();
 }
 
 init();

@@ -7,41 +7,77 @@
 <link rel="stylesheet" href="studio.css">
 </head>
 <body>
+
 <header class="topbar">
-  <div class="brand"><span class="logo" aria-hidden="true"></span><span class="wordmark">PPTAI<b>Studio</b></span></div>
+  <div class="brand">
+    <span class="logo" aria-hidden="true"></span>
+    <span class="wordmark">PPTAI <b>Studio</b></span>
+  </div>
   <div class="top-status">
-    <span id="worker-pill" class="pill state-offline" title="Local worker liveness">
-      <i class="dot"></i><span id="worker-state">worker offline</span>
+    <span id="worker-pill" class="status-pill state-offline" title="Local worker liveness">
+      <i class="dot" aria-hidden="true"></i><span id="worker-state">worker offline</span>
     </span>
     <span id="model-chip" class="chip" title="Effective provider configuration">loading…</span>
-    <a class="ghost-link" href="/upload/" title="Legacy minimal uploader">classic&nbsp;uploader</a>
+    <a class="quiet-link" href="/upload/" title="Legacy minimal uploader">classic uploader</a>
   </div>
 </header>
 
+<nav class="stagebar" aria-label="Workflow progress">
+  <ol class="stages">
+    <li class="stage" id="stage-source">
+      <span class="stage-num" aria-hidden="true">01</span>
+      <span class="stage-text">
+        <span class="stage-name">Source</span>
+        <span class="stage-note" id="stage-source-note">select and parse a document</span>
+      </span>
+    </li>
+    <li class="stage" id="stage-configure">
+      <span class="stage-num" aria-hidden="true">02</span>
+      <span class="stage-text">
+        <span class="stage-name">Configure</span>
+        <span class="stage-note" id="stage-configure-note">narrative, extraction, visuals, limits</span>
+      </span>
+    </li>
+    <li class="stage" id="stage-review">
+      <span class="stage-num" aria-hidden="true">03</span>
+      <span class="stage-text">
+        <span class="stage-name">Review</span>
+        <span class="stage-note" id="stage-review-note">jobs, decks and exports</span>
+      </span>
+    </li>
+  </ol>
+</nav>
+
 <main class="layout">
-  <!-- ============ LEFT: sources + settings ============ -->
-  <section class="col-left">
-    <div class="card" id="upload-card">
-      <div class="card-head">
-        <h2><span class="step">1</span> Sources</h2>
+
+  <!-- ============ LEFT: configuration column (bounded 340px) ============ -->
+  <aside class="col-config" aria-label="Configuration">
+
+    <section class="panel" id="source-panel" aria-labelledby="source-heading">
+      <div class="panel-head">
+        <h2 id="source-heading">Source</h2>
         <span class="hint" id="formats-hint">checking supported formats…</span>
       </div>
-      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload documents">
-        <div class="dz-inner">
-          <div class="dz-icon" aria-hidden="true">+</div>
-          <div class="dz-title">Drop documents here</div>
-          <div class="dz-sub">or <span class="linklike">browse files</span> — PDF, DOCX, TXT, MD, CSV, XLSX, PNG, JPEG</div>
-        </div>
+      <div id="dropzone" class="dropzone" tabindex="0" role="button"
+           aria-label="Upload documents: drop files here, or press Enter to browse">
+        <span class="dz-icon" aria-hidden="true">&#8593;</span>
+        <span class="dz-title">Drop documents here, or <span class="linklike">browse</span></span>
+        <span class="dz-sub" id="dz-formats">PDF, DOCX, TXT, MD, CSV, XLSX, PNG, JPEG</span>
       </div>
       <input type="file" id="file-input" multiple hidden>
-      <ul id="doc-list" class="doc-list"></ul>
-    </div>
+      <ul id="doc-list" class="doc-list" aria-live="polite" aria-label="Uploaded sources"></ul>
+    </section>
 
-    <div class="card" id="settings-card">
-      <div class="card-head"><h2><span class="step">2</span> Generation settings</h2></div>
-      <div class="grid2">
+    <section class="panel" id="configure-panel" aria-labelledby="configure-heading">
+      <div class="panel-head">
+        <h2 id="configure-heading">Configure</h2>
+        <span class="hint">generation settings</span>
+      </div>
+
+      <fieldset class="group">
+        <legend>Narrative</legend>
         <label class="field">
-          <span>Narrative lens</span>
+          <span class="field-label">Lens</span>
           <select id="lens">
             <option value="academic" selected>Academic — papers &amp; research</option>
             <option value="executive">Executive — business summaries</option>
@@ -50,14 +86,39 @@
           </select>
         </label>
         <label class="field">
-          <span>Extraction mode</span>
+          <span class="field-label">Instruction <em>(optional)</em></span>
+          <textarea id="instruction" rows="2" placeholder="Optional guidance for the storyboard and slides"></textarea>
+        </label>
+      </fieldset>
+
+      <fieldset class="group">
+        <legend>Extraction</legend>
+        <label class="field">
+          <span class="field-label">Extraction mode</span>
           <select id="extraction_mode">
             <option value="llm" selected>LLM — model-condensed units</option>
             <option value="source-passages">Source passages — verbatim blocks</option>
           </select>
         </label>
         <label class="field">
-          <span>Visual polish</span>
+          <span class="field-label">Source visuals</span>
+          <select id="asset_understanding">
+            <option value="structured" selected>Understand every figure / formula / table</option>
+            <option value="legacy">Skip asset AI — prose only (faster)</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset class="group">
+        <legend>Visuals &amp; rendering</legend>
+        <label class="field">
+          <span class="field-label">Theme</span>
+          <select id="theme">
+            <option value="auto" selected>Auto — follows the lens</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Visual polish</span>
           <select id="polish">
             <option value="off" selected>Off — fastest, no vision audit</option>
             <option value="auto">Auto — render + judge audit</option>
@@ -65,90 +126,96 @@
           </select>
         </label>
         <label class="field">
-          <span>Source visuals</span>
-          <select id="asset_understanding">
-            <option value="structured" selected>Understand every figure / formula / table</option>
-            <option value="legacy">Skip asset AI — prose only (faster)</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Renderer</span>
+          <span class="field-label">Renderer</span>
           <select id="renderer">
             <option value="python" selected>Python (python-pptx)</option>
             <option value="pptxgenjs">pptxgenjs (Node)</option>
           </select>
         </label>
-        <label class="field">
-          <span>Theme</span>
-          <select id="theme">
-            <option value="auto" selected>Auto — follows the lens</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Slides — min</span>
-          <input id="min_slides" type="number" min="1" max="30" value="5">
-        </label>
-        <label class="field">
-          <span>Slides — max</span>
-          <input id="max_slides" type="number" min="1" max="30" value="10">
-        </label>
-        <label class="field">
-          <span>Repairs per slide</span>
-          <input id="max_repairs_per_slide" type="number" min="0" max="5" value="2">
-        </label>
-        <label class="field">
-          <span>Concurrency</span>
-          <input id="max_concurrency" type="number" min="1" max="8" value="2">
-        </label>
-      </div>
-      <label class="field check">
-        <input id="dynamic_layout" type="checkbox" checked>
-        <span>Dynamic layout — measure content and re-solve slide geometry (F13)</span>
-      </label>
-      <label class="field check">
-        <input id="deep_verification" type="checkbox">
-        <span>Deep verification — semantic judging of every unit (slower, stricter)</span>
-      </label>
-      <label class="field check">
-        <input id="resume_cache" type="checkbox">
-        <span>Resume from cache — reuse validated checkpoints (extraction &amp; slides)</span>
-      </label>
-      <label class="field">
-        <span>Instruction <em>(optional, e.g. “emphasize the ablation results”)</em></span>
-        <textarea id="instruction" rows="2" placeholder="Optional guidance for the storyboard and slides"></textarea>
-      </label>
-      <div class="generate-actions">
-        <button id="generate" class="primary" disabled>
+      </fieldset>
+
+      <fieldset class="group">
+        <legend>Slides</legend>
+        <div class="pair">
+          <label class="field">
+            <span class="field-label">Minimum</span>
+            <input id="min_slides" type="number" min="1" max="30" value="5">
+          </label>
+          <label class="field">
+            <span class="field-label">Maximum</span>
+            <input id="max_slides" type="number" min="1" max="30" value="10">
+          </label>
+        </div>
+      </fieldset>
+
+      <details class="advanced" id="advanced-options">
+        <summary>Advanced options</summary>
+        <div class="advanced-body">
+          <label class="field">
+            <span class="field-label">Repairs per slide</span>
+            <input id="max_repairs_per_slide" type="number" min="0" max="5" value="2">
+          </label>
+          <label class="field">
+            <span class="field-label">Concurrency</span>
+            <input id="max_concurrency" type="number" min="1" max="8" value="2">
+          </label>
+          <label class="field check" title="Measure content and re-solve each slide's geometry at build time">
+            <input id="dynamic_layout" type="checkbox" checked>
+            <span>Dynamic layout — measured slide geometry, no overflow</span>
+          </label>
+          <label class="field check" title="Semantic judging of every unit; slower and stricter">
+            <input id="deep_verification" type="checkbox">
+            <span>Deep verification — semantic judging of every unit (slower, stricter)</span>
+          </label>
+          <label class="field check" title="Reuse validated extraction and slide checkpoints from previous runs">
+            <input id="resume_cache" type="checkbox">
+            <span>Resume from cache — reuse validated checkpoints</span>
+          </label>
+        </div>
+      </details>
+
+      <div class="run-actions">
+        <button id="generate" class="btn-primary" type="button" disabled>
           <span class="btn-label">Generate deck</span>
           <span class="btn-sub" id="generate-sub">upload and parse a source first</span>
         </button>
-        <button id="resume-generate" class="secondary" disabled title="Generate or resume deck using cached extraction and slide checkpoints">
-          <span class="btn-label">⚡ Resume generation</span>
+        <button id="resume-generate" class="btn-secondary" type="button" disabled
+                title="Queue generation reusing cached extraction and slide checkpoints">
+          <span class="btn-label">Resume generation</span>
           <span class="btn-sub" id="resume-sub">reuse cache / checkpoints</span>
         </button>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- ============ RIGHT: jobs + decks ============ -->
-  <section class="col-right">
-    <div class="card" id="jobs-card">
-      <div class="card-head">
-        <h2><span class="step">3</span> Jobs</h2>
+  </aside>
+
+  <!-- ============ RIGHT: workspace ============ -->
+  <section class="col-work" aria-label="Workspace">
+
+    <section class="panel" id="jobs-panel" aria-labelledby="jobs-heading">
+      <div class="panel-head">
+        <h2 id="jobs-heading">Jobs</h2>
         <span class="hint">live pipeline progress</span>
       </div>
-      <div id="jobs" class="jobs"><div class="empty">No jobs yet — upload a document to begin.</div></div>
-    </div>
-
-    <div class="card grow" id="decks-card">
-      <div class="card-head">
-        <h2><span class="step">4</span> Decks</h2>
-        <button id="refresh-decks" class="ghost" title="Reload deck list">⟳ refresh</button>
+      <div id="jobs" class="jobs">
+        <div class="empty-state">
+          <p class="empty-title">No jobs yet</p>
+          <p class="empty-sub">Upload a source, then generate — pipeline activity appears here.</p>
+        </div>
       </div>
-      <div id="decks" class="deck-list"><div class="empty">No decks yet.</div></div>
+    </section>
+
+    <section class="panel" id="decks-panel" aria-labelledby="decks-heading">
+      <div class="panel-head">
+        <h2 id="decks-heading">Decks</h2>
+        <button id="refresh-decks" class="btn-ghost" type="button" title="Reload deck list">Refresh</button>
+      </div>
+      <div id="decks" class="deck-list"></div>
       <div id="deck-detail" class="deck-detail" hidden></div>
-    </div>
+    </section>
+
   </section>
+
 </main>
 
 <div id="toast-root" aria-live="polite"></div>
