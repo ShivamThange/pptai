@@ -1,7 +1,7 @@
 import shutil
 from pathlib import Path
 from PIL import Image
-from core.artifacts import atomic_json, file_hash
+from infrastructure.utils.artifacts import atomic_json, file_hash
 from .docling import extract as docling_extract
 
 

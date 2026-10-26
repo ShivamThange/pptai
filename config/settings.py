@@ -76,6 +76,7 @@ def get_provider_model(provider: str, environ=None) -> str:
 class MultiAgentSettings:
     provider: str
     model: str
+    fast_model: str  # Tiered routing: cheap model for extraction/storyboard; empty means reuse `model`
     max_calls_per_minute: int
     max_concurrency: int
     ir1_batch_input_char_budget: int
@@ -169,6 +170,7 @@ def get_multi_agent_settings(environ=None) -> MultiAgentSettings:
     return MultiAgentSettings(
         provider=provider,
         model=model,
+        fast_model=env.get("LLM_FAST_MODEL", "").strip() or model,
         max_calls_per_minute=_positive_int("LLM_MAX_CALLS_PER_MINUTE", 30, env),
         max_concurrency=_positive_int("LLM_MAX_CONCURRENCY", 2, env),
         ir1_batch_input_char_budget=_positive_int("IR1_BATCH_INPUT_CHAR_BUDGET", 24000, env),

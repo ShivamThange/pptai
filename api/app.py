@@ -6,9 +6,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
-from schemas.ingestion_schema import IngestionError
+from contracts.ingestion_schema import IngestionError
 from config.service_settings import get_service_settings
-from core.jobs import JobStore
+from infrastructure.persistence.jobs import JobStore
 from api.routes import router
 
 FRONTEND = Path(__file__).resolve().parents[1] / 'frontend'

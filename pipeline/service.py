@@ -1,10 +1,10 @@
 """Synchronous application operations shared by CLI and the local worker."""
-from core.artifacts import parse_document_cached
-from core.job_context import check, report
-from core.llm_client import LLMClient
-from pipeline.stage2_quality_gate import verify_structural_ir
-from pipeline.orchestrator import run_multi_agent_pipeline, UNSPECIFIED_BASE
-from pipeline.slide_editor import edit_multi_agent_slide
+from infrastructure.utils.artifacts import parse_document_cached
+from application.jobs.job_context import check, report
+from infrastructure.llm.llm_client import LLMClient
+from infrastructure.ingestion.stage2_quality_gate import verify_structural_ir
+from application.pipeline.orchestrator import run_multi_agent_pipeline, UNSPECIFIED_BASE
+from application.services.slide_editor import edit_multi_agent_slide
 from renderers.factory import validate_renderer_runtime
 
 
@@ -20,7 +20,7 @@ def parse_source(source_path, parse_root, *, use_gpu=False, resume=True, context
     result_path = Path(path).parent / 'parse_result.json'
     details = None
     if result_path.is_file():
-        from schemas.ingestion_schema import ParseResult
+        from contracts.ingestion_schema import ParseResult
         result = ParseResult.model_validate_json(result_path.read_text(encoding='utf-8')).public()
         result['upload_id'] = (upload_spec or {}).get('upload_id')
         details = {'files_completed': 1, 'files_total': 1, 'current_document_id': result['upload_id'], 'outcomes': [result]}
@@ -40,14 +40,14 @@ def generate_deck(source_path, parse_root, options, *, context=None, caller=None
                               parse_options=parse_options, upload_spec=upload_spec, limits=limits)
     import json
     from pathlib import Path
-    from schemas.ingestion_schema import IngestionError
+    from contracts.ingestion_schema import IngestionError
     if Path(structural).is_file():
         data = json.loads(Path(structural).read_text(encoding='utf-8'))
         if str(data.get('schema_version')) == '3':
             if not data.get('blocks'):
                 raise IngestionError('SOURCE_CONTENT_UNAVAILABLE', 'No text/data supported by current knowledge extraction is available.')
             if source_selection:
-                from pipeline.ingestion.collection import assemble
+                from infrastructure.ingestion.collection import assemble
                 result = json.loads((Path(structural).parent / 'parse_result.json').read_text(encoding='utf-8'))
                 structural = assemble([{'path': structural, 'result': result,
                     'upload_ids': source_selection.get('upload_ids', []), 'aliases': source_selection.get('aliases', [])}], options.output_dir)
@@ -69,8 +69,8 @@ def parse_sources(sources, parse_root, *, use_gpu=False, resume=True, context=No
     import logging
     import sqlite3
     from pathlib import Path
-    from core.artifacts import file_hash
-    from schemas.ingestion_schema import IngestionError
+    from infrastructure.utils.artifacts import file_hash
+    from contracts.ingestion_schema import IngestionError
     outcomes, members = [], []
     for index, source in enumerate(sources):
         check(context)
@@ -86,7 +86,7 @@ def parse_sources(sources, parse_root, *, use_gpu=False, resume=True, context=No
                 upload_spec=source.get('upload_spec'), use_gpu=use_gpu, resume=resume, context=context, limits=limits)
             result_path = parsed.parent / 'parse_result.json'
             if result_path.is_file():
-                from schemas.ingestion_schema import ParseResult
+                from contracts.ingestion_schema import ParseResult
                 result = ParseResult.model_validate_json(result_path.read_text(encoding='utf-8')).public()
             else:
                 result = {'document_id': 'doc_' + file_hash(path), 'parse_key': parsed.parent.name,
@@ -123,8 +123,8 @@ def parse_sources(sources, parse_root, *, use_gpu=False, resume=True, context=No
 def generate_deck_from_sources(sources, parse_root, options, *, context=None, caller=None, settings=None, api_key=None,
         expected_base_revision=UNSPECIFIED_BASE, on_parsed=None, on_outcome=None, on_member_parsed=None, limits=None,
         parse_resume=True):
-    from pipeline.ingestion.collection import assemble
-    from schemas.ingestion_schema import IngestionError
+    from infrastructure.ingestion.collection import assemble
+    from contracts.ingestion_schema import IngestionError
     check(context)
     validate_renderer_runtime(options.renderer)
     members, outcomes = parse_sources(sources, parse_root, use_gpu=options.use_gpu, resume=parse_resume,

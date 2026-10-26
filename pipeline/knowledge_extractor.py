@@ -12,9 +12,9 @@ import os
 from pydantic import BaseModel, ConfigDict, Field
 
 from config.settings import get_multi_agent_settings
-from core.job_context import check, report
-from core.artifacts import write_validated_json, sha256_value, CheckpointCache, dependency_fingerprint, caller_fingerprint, portable_value
-from schemas.ir1_schema import (
+from application.jobs.job_context import check, report
+from infrastructure.utils.artifacts import write_validated_json, sha256_value, CheckpointCache, dependency_fingerprint, caller_fingerprint, portable_value
+from contracts.ir1_schema import (
     EvidenceRef,
     ExtractedConcept,
     IR1KnowledgeBase,
@@ -30,8 +30,8 @@ from schemas.ir1_schema import (
     MetricComparison,
     CoverageItem,
 )
-from tools.claim_verification import validate_claim, judge_semantics, mentions, structured_claims, evidence_text
-from schemas.raw_extraction_schema import RawExtraction, SourceAsset, SourceBlock
+from domain.evaluation.claim_verification import validate_claim, judge_semantics, mentions, structured_claims, evidence_text
+from contracts.raw_extraction_schema import RawExtraction, SourceAsset, SourceBlock
 
 
 class StructuredCaller(Protocol):
@@ -243,17 +243,17 @@ def _progressive_extract(raw, caller, *, target_sections, target_source_ids, rep
                          checkpoint_cache, context, ledger, output_dir, fragment_repairs):
     import os
     import uuid
-    from core.context_budget import ContextBudgetError
-    from core.artifacts import atomic_json
-    from pipeline.context_fragments import plan_extraction_chunks, subdivide, projected_raw
-    from pipeline.coverage_ledger import initialize_ledger, record_preparation, record_call_outcome, validate_context_coverage, validate_supplied_evidence
-    from schemas.context_schema import ContextCallRecord, CoverageEvent
+    from infrastructure.llm.context_budget import ContextBudgetError
+    from infrastructure.utils.artifacts import atomic_json
+    from infrastructure.ingestion.context_fragments import plan_extraction_chunks, subdivide, projected_raw
+    from domain.evaluation.coverage_ledger import initialize_ledger, record_preparation, record_call_outcome, validate_context_coverage, validate_supplied_evidence
+    from contracts.context_schema import ContextCallRecord, CoverageEvent
     ledger = ledger if ledger is not None else initialize_ledger(raw)
     target = Path(output_dir) if output_dir else None
     chunks, units = [], []
     lineage = []
     if target_sections is not None and target and (target / 'extraction_chunks.json').is_file():
-        from schemas.context_schema import ContextChunksArtifact
+        from contracts.context_schema import ContextChunksArtifact
         previous = ContextChunksArtifact.model_validate_json((target / 'extraction_chunks.json').read_text(encoding='utf-8'))
         chunks = previous.chunks
         lineage = previous.lineage
@@ -279,7 +279,7 @@ def _progressive_extract(raw, caller, *, target_sections, target_source_ids, rep
         prepared.context.omitted_optional_refs = [{'ref_id': r.ref_id, 'reason':'optional_context_over_budget'}
             for r in part.omitted_context_refs or []]
         if reduced_ceiling is not None:
-            from core.context_budget import assert_fits
+            from infrastructure.llm.context_budget import assert_fits
             prepared.context.budget.input_ceiling = min(prepared.context.budget.input_ceiling, reduced_ceiling)
             prepared.context.request_hash = prepared.fingerprint()
             prepared.context.measurement.request_fingerprint = prepared.context.request_hash
@@ -288,7 +288,7 @@ def _progressive_extract(raw, caller, *, target_sections, target_source_ids, rep
                 caller.prepared_contexts[prepared.context.request_hash] = prepared.context
         return prepared
     # Fixed overhead failure is diagnosed separately, before subdividing source.
-    from pipeline.context_fragments import Fragment
+    from infrastructure.ingestion.context_fragments import Fragment
     try:
         request(Fragment([], [], [], []), estimate_only=True)
     except ContextBudgetError as error:
@@ -472,7 +472,7 @@ def coverage_ledger(raw: RawExtraction, accepted: list[KnowledgeUnit], candidate
             expected = mentions(block_map[source_id].text)
             quoted = any(" ".join(unit.summary.casefold().split()) == " ".join(block_map[source_id].text.casefold().split()) for unit in good)
             if not quoted and fragment_ledger is not None:
-                from pipeline.coverage_ledger import interval_union
+                from domain.evaluation.coverage_ledger import interval_union
                 original_text = block_map[source_id].text
                 exact_spans = []
                 for event in fragment_ledger.events:
@@ -520,7 +520,7 @@ def validate_knowledge_units(raw: RawExtraction, units: list[KnowledgeUnit]) -> 
     seen_ids: set[str] = set()
     asset_units = {}
     if raw.schema_version == '4':
-        from pipeline.asset_interpreter import asset_insights_to_units
+        from infrastructure.ingestion.asset_interpreter import asset_insights_to_units
         asset_units = {u.unit_id:u for u in asset_insights_to_units(raw)}
     for unit in units:
         if unit.unit_id in seen_ids:
@@ -529,7 +529,7 @@ def validate_knowledge_units(raw: RawExtraction, units: list[KnowledgeUnit]) -> 
         seen_ids.add(unit.unit_id)
         original_asset_unit = asset_units.get(unit.unit_id)
         if unit.origin_insight_ids:
-            from schemas.ir1_schema import ValidationResult
+            from contracts.ir1_schema import ValidationResult
             unit.validation = original_asset_unit.validation if original_asset_unit and unit.summary == original_asset_unit.summary and unit.evidence == original_asset_unit.evidence else ValidationResult(
                 status='REJECTED',reason=['ASSET_INSIGHT_UNSUPPORTED: changed asset-derived unit'])
         else:
@@ -653,12 +653,12 @@ def generate_validated_ir1(
     if extraction_mode not in {"llm", "source-passages"}:
         raise ValueError("extraction_mode must be llm or source-passages")
     check(context)
-    from pipeline.coverage_ledger import initialize_ledger
-    from schemas.context_schema import CoverageEvent
+    from domain.evaluation.coverage_ledger import initialize_ledger
+    from contracts.context_schema import CoverageEvent
     context_ledger = initialize_ledger(raw)
     target = Path(output_dir)
     target.mkdir(parents=True, exist_ok=True)
-    from pipeline.coverage_ledger import verify_retained_sources
+    from domain.evaluation.coverage_ledger import verify_retained_sources
     context_ledger.source_integrity = 'verified' if verify_retained_sources(target, raw) else 'unknown'
     units = source_passage_units(raw) if extraction_mode == "source-passages" else extract_knowledge_units(raw, caller, checkpoint_cache=checkpoint_cache, context=context,
         context_ledger=context_ledger, context_output_dir=target, fragment_repairs=max_section_retries)
@@ -692,13 +692,13 @@ def generate_validated_ir1(
         ledger = coverage_ledger(raw, accepted, units, fragment_ledger=context_ledger)
         failed_sections = {row.section for row in ledger if row.status != "COVERED"}
         warnings.extend(retry_warnings)
-    from core.artifacts import atomic_json
+    from infrastructure.utils.artifacts import atomic_json
     if extraction_mode == 'source-passages':
         context_ledger.events.append(CoverageEvent(dimension='processed', refs=context_ledger.inventory,
             stage='deterministic_source_passages', unit_ids=[u.unit_id for u in accepted]))
         context_ledger.context_completeness = 'complete'
-        from pipeline.coverage_ledger import validate_context_coverage
-        from pipeline.context_fragments import initial_fragments
+        from domain.evaluation.coverage_ledger import validate_context_coverage
+        from infrastructure.ingestion.context_fragments import initial_fragments
         chunks = [part.chunk().model_copy(update={'state': 'COMPLETE'}) for part in initial_fragments(raw)]
         validate_context_coverage(raw, chunks, context_ledger)
         atomic_json(target / 'extraction_chunks.json', {'schema_version': 'f07-v1', 'chunks': [c.model_dump(mode='json') for c in chunks]})
@@ -733,12 +733,12 @@ def generate_validated_ir1(
         raise ValueError("Knowledge extraction produced no basic-checked factual units.")
 
     if raw.schema_version == '4':
-        from pipeline.asset_interpreter import asset_insights_to_units
+        from infrastructure.ingestion.asset_interpreter import asset_insights_to_units
         accepted = deduplicate_units([*accepted, *asset_insights_to_units(raw)])
 
     aliases = {}
     if deduplicate:
-        from pipeline.deduplicator import deduplicate_knowledge_units
+        from infrastructure.ingestion.deduplicator import deduplicate_knowledge_units
         dedup_res = deduplicate_knowledge_units(accepted)
         accepted = dedup_res.canonical_units
         atomic_json(target / "dedup_report.json", dedup_res.model_dump(mode="json"))

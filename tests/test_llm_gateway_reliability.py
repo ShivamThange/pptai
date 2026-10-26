@@ -13,12 +13,12 @@ import pytest
 from pydantic import BaseModel
 
 from config.settings import ProviderCapabilities, TaskBudget, get_multi_agent_settings
-from core.llm_client import LLMClient, LLMBudgetError, LLMCancelledError, LLMRequestError, RpmLimiter
-from core.context_budget import ContextBudgetError
-from core.llm_run import observe_llm_run
-from pipeline.orchestrator import MultiAgentOptions, run_multi_agent_pipeline
-from pipeline.slide_composer import compose_single_slide
-from schemas.storyboard_schema import SlidePlan
+from infrastructure.llm.llm_client import LLMClient, LLMBudgetError, LLMCancelledError, LLMRequestError, RpmLimiter
+from infrastructure.llm.context_budget import ContextBudgetError
+from infrastructure.llm.llm_run import observe_llm_run
+from application.pipeline.orchestrator import MultiAgentOptions, run_multi_agent_pipeline
+from infrastructure.ingestion.slide_composer import compose_single_slide
+from contracts.storyboard_schema import SlidePlan
 
 
 class Answer(BaseModel):
@@ -204,7 +204,7 @@ def test_malformed_response_can_recover_within_task_budget():
 
 
 def test_extraction_schema_rejects_invalid_kinds_before_silent_filtering():
-    from pipeline.knowledge_extractor import KnowledgeUnitBatch
+    from infrastructure.ingestion.knowledge_extractor import KnowledgeUnitBatch
     unit = {"kind": "Knowledge", "title": "Attention", "summary": "Attention combines values.",
             "evidence": [{"source_id": "block_1", "excerpt": "Attention combines values."}]}
     valid_unit = {**unit, "kind": "concept"}
@@ -455,8 +455,8 @@ def test_pipeline_failure_preserves_raw_artifacts_and_records_terminal_stage(tmp
 
 
 def test_evaluator_inherits_configuration_and_uses_gateway(monkeypatch):
-    from evalute.config import load
-    from evalute.metrics.faithfulness import evaluate
+    from evaluation.config import load
+    from evaluation.metrics.faithfulness import evaluate
     monkeypatch.setenv("OPENROUTER_MODEL", "configured-generation-model")
     assert get_multi_agent_settings().evaluator_model == "configured-generation-model"
     assert LLMClient.for_evaluation(api_key="test").model == "configured-generation-model"

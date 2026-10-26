@@ -1,6 +1,6 @@
 import pytest
-from core.asset_registry import AssetRegistry
-from tools.chart_binding import resolve_chart
+from domain.extraction.asset_registry import AssetRegistry
+from domain.evaluation.chart_binding import resolve_chart
 from f04_helpers import enriched
 
 
@@ -26,8 +26,8 @@ def test_float_precision_loss_rejected(tmp_path):
 
 
 def test_explicit_selected_table_chart_and_no_identifier_or_blank_coercion(tmp_path):
-    from tools.chart_binding import bind_selected_table
-    from schemas.asset_schema import ChartMapping
+    from domain.evaluation.chart_binding import bind_selected_table
+    from contracts.asset_schema import ChartMapping
     raw,root,_=enriched('results.csv',tmp_path)
     table=raw.assets[0]
     mapping=ChartMapping(table_asset_id=table.asset_id,rows=[1,2],category_column=0,series_columns=[1],header_row=0)

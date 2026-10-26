@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.llm_client import LLMClient
+from infrastructure.llm.llm_client import LLMClient
 
 from ..metrics.semantic import similarities
 from ..util import sentences

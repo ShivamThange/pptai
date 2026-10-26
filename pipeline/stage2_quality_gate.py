@@ -51,7 +51,7 @@ def verify_structural_ir(ir_path: str = "output/ir.json") -> bool:
 
     # For v3 schema, run typed ingestion validation
     if str(ir.get("schema_version")) == "3":
-        from pipeline.ingestion.validation import validate_ingestion
+        from infrastructure.ingestion.validation import validate_ingestion
         try:
             validate_ingestion(str(ir_file), require_complete=False)
         except Exception as e:

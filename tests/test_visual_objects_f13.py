@@ -4,14 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from core.builder import PresentationBuilder
-from core.theme_engine import load_theme
-from pipeline.quality_controller import run_deterministic_quality_checks
-from pipeline.slide_composer import visible_claims
-from pipeline.storyboard_planner import build_layout_catalog
-from pipeline.visual_placement import ensure_planned_visual
+from application.jobs.builder import PresentationBuilder
+from domain.rendering.theme_engine import load_theme
+from infrastructure.ingestion.quality_controller import run_deterministic_quality_checks
+from infrastructure.ingestion.slide_composer import visible_claims
+from infrastructure.ingestion.storyboard_planner import build_layout_catalog
+from infrastructure.ingestion.visual_placement import ensure_planned_visual
 from renderers.base import VISUAL_OBJECT_KINDS
-from schemas.ir2_content_schema import SlideSpec
+from contracts.ir2_content_schema import SlideSpec
 
 ROOT = Path(__file__).resolve().parents[1]
 LAYOUTS = ROOT / "config" / "ppt_default_layouts.json"
@@ -149,9 +149,9 @@ def test_planned_visual_remaps_a_stat_slide_without_losing_the_value():
 
 
 def test_storyboard_attaches_a_section_matched_figure():
-    from schemas.ir1_schema import EvidenceRef, KnowledgeUnit, ValidatedIR1, VisualAsset
-    from schemas.storyboard_schema import SlidePlan, Storyboard
-    from pipeline.storyboard_planner import attach_asset_candidates
+    from contracts.ir1_schema import EvidenceRef, KnowledgeUnit, ValidatedIR1, VisualAsset
+    from contracts.storyboard_schema import SlidePlan, Storyboard
+    from infrastructure.ingestion.storyboard_planner import attach_asset_candidates
 
     asset = VisualAsset(asset_id="image_a", kind="image", section_path=["3.1 Encoder"],
                         source_refs=[], locations=[], caption_refs=[], caption_locations=[],

@@ -6,15 +6,15 @@ from pptx.util import Inches, Pt
 from pptx.enum.shapes import MSO_SHAPE, MSO_CONNECTOR
 from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE
-from core.quality_metadata import declare_metadata
-from core.artifacts import sha256_value
-from evalute.extract.pptx_extractor import extract
-from pipeline.quality_controller import (run_deterministic_quality_checks, assess_final_artifact,
+from domain.evaluation.quality_metadata import declare_metadata
+from infrastructure.utils.artifacts import sha256_value
+from evaluation.extract.pptx_extractor import extract
+from infrastructure.ingestion.quality_controller import (run_deterministic_quality_checks, assess_final_artifact,
     artifact_hash, factual_check, resolve_readiness, adapt_legacy_quality_report, QualityCheck)
-from pipeline.slide_renderer import RenderResult
-from pipeline.visual_reviewer import audit_slide_images
-from schemas.ir1_schema import ValidationResult
-from schemas.ir2_content_schema import SlideSpec, TargetIR2Presentation
+from infrastructure.ingestion.slide_renderer import RenderResult
+from infrastructure.ingestion.visual_reviewer import audit_slide_images
+from contracts.ir1_schema import ValidationResult
+from contracts.ir2_content_schema import SlideSpec, TargetIR2Presentation
 
 
 def textbox(slide, text='Readable content', left=1, top=1, width=3, height=1, size=18):
@@ -214,10 +214,10 @@ def test_legacy_success_is_rechecked_and_original_preserved(tmp_path):
 def pipeline_fixture(tmp_path):
     import hashlib
     from pathlib import Path
-    from pipeline.knowledge_extractor import KnowledgeUnitBatch, KnowledgeUnitDraft
-    from pipeline.source_adapter import adapt_structural_ir
-    from schemas.ir1_schema import EvidenceRef
-    from schemas.storyboard_schema import SlidePlan, Storyboard
+    from infrastructure.ingestion.knowledge_extractor import KnowledgeUnitBatch, KnowledgeUnitDraft
+    from infrastructure.ingestion.source_adapter import adapt_structural_ir
+    from contracts.ir1_schema import EvidenceRef
+    from contracts.storyboard_schema import SlidePlan, Storyboard
     structural = {'document_name': 'source.txt', 'blocks': [{'block_id': 'b1', 'type': 'text',
                   'text': 'Attention combines values using learned weights.', 'section': 'Intro'}], 'assets': []}
     path = tmp_path / 'ir.json'; path.write_text(json.dumps(structural))
@@ -257,7 +257,7 @@ def rendered_fixture(path, out):
 
 @pytest.mark.parametrize('final_fail', [False, True])
 def test_scoped_repair_rerenders_and_uses_final_audit(tmp_path, monkeypatch, final_fail):
-    from pipeline.orchestrator import run_multi_agent_pipeline, MultiAgentOptions
+    from application.pipeline.orchestrator import run_multi_agent_pipeline, MultiAgentOptions
     source, layouts, caller = pipeline_fixture(tmp_path)
     caller.fail_judge = final_fail
     rendered = []
@@ -289,8 +289,8 @@ def test_scoped_repair_rerenders_and_uses_final_audit(tmp_path, monkeypatch, fin
 
 @pytest.mark.parametrize('reason', ['render', 'judge', 'geometry'])
 def test_failed_edit_preserves_previous_pptx_ir2_and_quality_report(tmp_path, monkeypatch, reason):
-    from pipeline.orchestrator import run_multi_agent_pipeline, MultiAgentOptions
-    from pipeline.slide_editor import edit_multi_agent_slide
+    from application.pipeline.orchestrator import run_multi_agent_pipeline, MultiAgentOptions
+    from application.services.slide_editor import edit_multi_agent_slide
     source, layouts, caller = pipeline_fixture(tmp_path)
     root = tmp_path / 'run'
     monkeypatch.setattr('pipeline.quality_controller.render_pptx_slides', rendered_fixture)
@@ -310,13 +310,13 @@ def test_failed_edit_preserves_previous_pptx_ir2_and_quality_report(tmp_path, mo
     with pytest.raises(ValueError):
         edit_multi_agent_slide(output_dir=root, layouts_path=layouts, slide_index=1, instruction='Refine typography',
                                base_revision=revision.name, caller=caller)
-    from core.revisions import active_artifacts
+    from infrastructure.persistence.revisions import active_artifacts
     assert active_artifacts(root) == revision
     assert all((revision / name).read_bytes() == data for name, data in previous.items())
 
 
 def test_native_render_worker_failure_is_explicit(tmp_path, monkeypatch):
-    from pipeline.slide_renderer import render_pptx_slides
+    from infrastructure.ingestion.slide_renderer import render_pptx_slides
     import subprocess
     prs, slide, path = deck(tmp_path); textbox(slide); prs.save(path)
     def failed(*args, **kwargs):
@@ -329,8 +329,8 @@ def test_native_render_worker_failure_is_explicit(tmp_path, monkeypatch):
 
 def test_partial_factual_judge_failure_retains_contradiction(monkeypatch):
     import numpy as np
-    from evalute.config import load
-    from evalute.metrics.faithfulness import evaluate, ClaimVerdict
+    from evaluation.config import load
+    from evaluation.metrics.faithfulness import evaluate, ClaimVerdict
     monkeypatch.setattr('evalute.metrics.faithfulness.similarities', lambda *a: (np.array([[1.0], [1.0]]), 'fixture'))
     class Judge:
         calls = 0
@@ -347,9 +347,9 @@ def test_partial_factual_judge_failure_retains_contradiction(monkeypatch):
 
 
 def test_evaluator_missing_judging_does_not_create_complete_overall(tmp_path, monkeypatch):
-    from evalute.config import load
-    from evalute.runner import evaluate_presentation
-    from evalute.reference.build_reference import build
+    from evaluation.config import load
+    from evaluation.runner import evaluate_presentation
+    from evaluation.reference.build_reference import build
     prs, slide, path = deck(tmp_path); textbox(slide, text='Attention combines values using learned weights.'); prs.save(path)
     ir = tmp_path / 'source.json'; ir.write_text(json.dumps({'document_name': 'source.txt', 'blocks': [{'block_id': 'b1', 'text': 'Attention combines values using learned weights.'}]}))
     ir1 = tmp_path / 'ir1.json'; ir1.write_text(json.dumps({'document_title': 'Attention', 'concepts': [{'title': 'Attention', 'summary': 'Attention combines values using learned weights.', 'source_block_ids': ['b1']}]}))

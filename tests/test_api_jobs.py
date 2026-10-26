@@ -9,8 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 from api.app import create_app
 from api.routes import events, safe_filename
-from core.artifacts import file_hash
-from core.revisions import RevisionStore
+from infrastructure.utils.artifacts import file_hash
+from infrastructure.persistence.revisions import RevisionStore
 from test_service_jobs import queued
 
 
@@ -161,7 +161,7 @@ def test_artifacts_readiness_edits_pinned_history_and_unpublished_rejection(api)
 
 def test_missing_preview_does_not_render_on_download(api, monkeypatch):
     client, settings, store, worker, callers = api
-    from pipeline.slide_renderer import RenderResult
+    from infrastructure.ingestion.slide_renderer import RenderResult
     def unavailable(path, output):
         return RenderResult("FAILED_TO_RUN", [], artifact_hash=file_hash(path), reason="fixture render unavailable")
     monkeypatch.setattr("pipeline.quality_controller.render_pptx_slides", unavailable)

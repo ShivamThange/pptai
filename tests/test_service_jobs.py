@@ -9,13 +9,13 @@ from pathlib import Path
 import pytest
 from config.service_settings import ServiceSettings
 from config.settings import get_multi_agent_settings
-from core.artifacts import atomic_json, file_hash
-from core.job_context import JobContext
-from core.jobs import JobStore
-from core.llm_client import LLMClient, LLMCancelledError, LLMBudgetError, RpmLimiter
-from core.revisions import RevisionStore, StaleRevisionError
+from infrastructure.utils.artifacts import atomic_json, file_hash
+from application.jobs.job_context import JobContext
+from infrastructure.persistence.jobs import JobStore
+from infrastructure.llm.llm_client import LLMClient, LLMCancelledError, LLMBudgetError, RpmLimiter
+from infrastructure.persistence.revisions import RevisionStore, StaleRevisionError
 from pipeline import service
-from pipeline.orchestrator import MultiAgentOptions, run_multi_agent_pipeline
+from application.pipeline.orchestrator import MultiAgentOptions, run_multi_agent_pipeline
 from workers.local import LocalWorker
 from test_cache_resume_revision_repair import FixtureCaller, fixture_source, render_fixture
 
@@ -44,7 +44,7 @@ def queued(tmp_path, monkeypatch):
 
 
 def submit(settings, store, **options):
-    from core.jobs import new_id
+    from infrastructure.persistence.jobs import new_id
     deck_id = new_id()
     return store.create_deck("doc", settings.root / "decks" / deck_id,
                               {"min_slides": 4, "max_slides": 4, "max_repairs_per_slide": 0,

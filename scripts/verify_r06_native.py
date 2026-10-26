@@ -15,19 +15,19 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from PIL import Image, ImageDraw
 from pptx import Presentation
-from core.artifacts import atomic_json, file_hash, sha256_value
-from core.asset_registry import AssetRegistry
-from core.builder import PresentationBuilder
+from infrastructure.utils.artifacts import atomic_json, file_hash, sha256_value
+from domain.extraction.asset_registry import AssetRegistry
+from application.jobs.builder import PresentationBuilder
 from renderers.base import legacy_ir2_to_scene
 from renderers.factory import get_renderer
 from renderers.artifact import verify_native_coverage
-from pipeline.slide_renderer import render_pptx_slides
-from pipeline.quality_controller import run_deterministic_quality_checks
-from pipeline.orchestrator import runtime_dependencies, run_multi_agent_pipeline, MultiAgentOptions
-from pipeline.slide_editor import edit_multi_agent_slide
-from core.revisions import RevisionStore
-from core.chart_content import native_series_name
-from schemas.raw_extraction_schema import SourceAsset, SourceLocation
+from infrastructure.ingestion.slide_renderer import render_pptx_slides
+from infrastructure.ingestion.quality_controller import run_deterministic_quality_checks
+from application.pipeline.orchestrator import runtime_dependencies, run_multi_agent_pipeline, MultiAgentOptions
+from application.services.slide_editor import edit_multi_agent_slide
+from infrastructure.persistence.revisions import RevisionStore
+from domain.rendering.chart_content import native_series_name
+from contracts.raw_extraction_schema import SourceAsset, SourceLocation
 
 
 def catalog():

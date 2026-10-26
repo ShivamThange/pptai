@@ -4,15 +4,15 @@ from dataclasses import replace
 from pathlib import Path
 import pytest
 from config.settings import get_multi_agent_settings
-from core.artifacts import CheckpointCache, sha256_value
-from core.context_budget import ContextBudgetError
-from core.llm_client import LLMClient, LLMBudgetError
-from pipeline.knowledge_extractor import generate_validated_ir1, KnowledgeUnit, KnowledgeUnitBatch, KnowledgeUnitDraft
-from pipeline.context_fragments import initial_fragments, subdivide
-from pipeline.coverage_ledger import initialize_ledger, validate_context_coverage, validate_supplied_evidence, record_call_outcome
-from schemas.context_schema import CoverageEvent, ContextCallRecord, CoverageLedger, ContextChunk
-from schemas.ir1_schema import EvidenceRef
-from schemas.raw_extraction_schema import RawExtraction, SourceBlock
+from infrastructure.utils.artifacts import CheckpointCache, sha256_value
+from infrastructure.llm.context_budget import ContextBudgetError
+from infrastructure.llm.llm_client import LLMClient, LLMBudgetError
+from infrastructure.ingestion.knowledge_extractor import generate_validated_ir1, KnowledgeUnit, KnowledgeUnitBatch, KnowledgeUnitDraft
+from infrastructure.ingestion.context_fragments import initial_fragments, subdivide
+from domain.evaluation.coverage_ledger import initialize_ledger, validate_context_coverage, validate_supplied_evidence, record_call_outcome
+from contracts.context_schema import CoverageEvent, ContextCallRecord, CoverageLedger, ContextChunk
+from contracts.ir1_schema import EvidenceRef
+from contracts.raw_extraction_schema import RawExtraction, SourceBlock
 from test_context_budget_f07 import Response
 
 
@@ -45,7 +45,7 @@ class SourceClient(LLMClient):
                     if cell.get('column_header') or cell.get('row_header') or not str(cell['text']).strip():
                         continue
                     ref = EvidenceRef(source_id=asset['id'], kind='cell', row=cell['row'], column=cell['column'], excerpt=cell['text'])
-                    from tools.claim_verification import evidence_text
+                    from domain.evaluation.claim_verification import evidence_text
                     raw = self.source_raw or getattr(self, 'context_source', None)
                     support, _ = evidence_text(raw, [ref]) if raw else ([cell['text']], [])
                     units.append(KnowledgeUnitDraft(kind='concept', title='Source cell', summary=support[0], evidence=[ref]))
@@ -197,7 +197,7 @@ def test_r03_scoped_retry_preserves_other_completed_context_chunks(tmp_path):
     gateway._transport = respond
     ir1 = generate_validated_ir1(raw_source(4), gateway, tmp_path, max_section_retries=1)
     assert len(ir1.units) == 4 and len(gateway.requests) == 3
-    from schemas.context_schema import ContextChunksArtifact
+    from contracts.context_schema import ContextChunksArtifact
     artifact = ContextChunksArtifact.model_validate_json((tmp_path/'extraction_chunks.json').read_text())
     ledger = CoverageLedger.model_validate_json((tmp_path/'context_coverage.json').read_text())
     assert not validate_context_coverage(raw_source(4), artifact.chunks, ledger)

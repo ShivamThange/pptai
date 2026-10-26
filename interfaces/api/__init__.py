@@ -1,0 +1,1 @@
+"""Local FastAPI job service."""

@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 import pytest
-from core.asset_registry import AssetRegistry
-from tools.asset_inspection import inspect_asset,list_assets,asset_file
+from domain.extraction.asset_registry import AssetRegistry
+from domain.evaluation.asset_inspection import inspect_asset,list_assets,asset_file
 from f04_helpers import enriched,AssetCaller
 
 

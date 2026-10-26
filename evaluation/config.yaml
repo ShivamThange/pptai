@@ -1,0 +1,7 @@
+embedding:
+  model: sentence-transformers/all-MiniLM-L6-v2
+coverage: {covered_threshold: 0.65, partial_threshold: 0.45, partial_credit: 0.5}
+faithfulness: {enabled: true, top_k_evidence: 5, judge_provider: null, judge_model: null, temperature: 0.0}
+visual: {safe_margin_inches: 0.25, overlap_ratio: 0.05, body_small_font_pt: 14, dense_words: 180}
+aggregate:
+  weights: {semantic: 0.2, coverage: 0.3, faithfulness: 0.2, functional: 0.1, structure: 0.1, visual: 0.1}

@@ -13,19 +13,19 @@ import pytest
 from PIL import Image
 from pptx import Presentation
 
-from core.artifacts import (CheckpointCache, atomic_json, file_hash, parse_document_cached,
+from infrastructure.utils.artifacts import (CheckpointCache, atomic_json, file_hash, parse_document_cached,
                             portable_value, sha256_value, artifact_lock)
-from core.llm_client import LLMCancelledError
-from core.revisions import RevisionStore, active_artifacts
-from pipeline.knowledge_extractor import KnowledgeUnitBatch, KnowledgeUnitDraft, extract_knowledge_units
-from pipeline.orchestrator import MultiAgentOptions, run_multi_agent_pipeline
-from pipeline.slide_composer import SlideCompositionError, slide_cache_key
-from pipeline.slide_editor import edit_multi_agent_slide
-from pipeline.slide_renderer import RenderResult
-from pipeline.source_adapter import adapt_structural_ir
-from schemas.ir1_schema import EvidenceRef
-from schemas.ir2_content_schema import SlideSpec
-from schemas.storyboard_schema import SlidePlan, Storyboard
+from infrastructure.llm.llm_client import LLMCancelledError
+from infrastructure.persistence.revisions import RevisionStore, active_artifacts
+from infrastructure.ingestion.knowledge_extractor import KnowledgeUnitBatch, KnowledgeUnitDraft, extract_knowledge_units
+from application.pipeline.orchestrator import MultiAgentOptions, run_multi_agent_pipeline
+from infrastructure.ingestion.slide_composer import SlideCompositionError, slide_cache_key
+from application.services.slide_editor import edit_multi_agent_slide
+from infrastructure.ingestion.slide_renderer import RenderResult
+from infrastructure.ingestion.source_adapter import adapt_structural_ir
+from contracts.ir1_schema import EvidenceRef
+from contracts.ir2_content_schema import SlideSpec
+from contracts.storyboard_schema import SlidePlan, Storyboard
 
 
 class FixtureCaller:
@@ -162,7 +162,7 @@ def test_process_kill_after_staging_keeps_active_pair_and_releases_lock(setup_ru
     pointer = (Path(options.output_dir) / "active.json").read_bytes()
     script = """import os, sys
 from pathlib import Path
-from core.revisions import RevisionStore
+from infrastructure.persistence.revisions import RevisionStore
 store = RevisionStore(sys.argv[1])
 store.commit(Path(sys.argv[2]), base_revision=sys.argv[3], operation='crash-test', failpoint=lambda *args: os._exit(73))
 """
@@ -323,7 +323,7 @@ def test_cli_unchanged_resume_makes_no_parser_generation_build_or_render_calls(s
 
 
 def test_changed_json_after_render_cannot_be_published(setup_run):
-    from core.revisions import copy_bundle
+    from infrastructure.persistence.revisions import copy_bundle
     source, options, caller = setup_run
     original = run_multi_agent_pipeline(source, options, caller=caller)
     store = RevisionStore(options.output_dir)
@@ -350,8 +350,8 @@ def test_edit_cache_binding_survives_changed_quality_options(setup_run):
 
 
 def test_explicit_legacy_import_rejects_forged_source_claims(setup_run, tmp_path):
-    from core.revisions import copy_bundle
-    from pipeline.slide_editor import import_legacy_revision
+    from infrastructure.persistence.revisions import copy_bundle
+    from application.services.slide_editor import import_legacy_revision
     source, options, caller = setup_run
     original = run_multi_agent_pipeline(source, options, caller=caller)
     legacy = tmp_path / "legacy"

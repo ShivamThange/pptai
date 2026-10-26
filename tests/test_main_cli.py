@@ -71,7 +71,7 @@ def test_missing_renderer_dependencies_fail_before_llm_construction(tmp_path, mo
 def test_default_cli_evaluation_uses_active_revision_projection(tmp_path, monkeypatch, capsys, overall):
     from pipeline import service
     from evalute import config, runner
-    from evalute.reference import build_reference
+    from evaluation.reference import build_reference
     from core import artifacts
 
     run = tmp_path / "run"

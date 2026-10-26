@@ -16,9 +16,9 @@ sys.path.insert(0, str(ROOT / "tests"))
 from api.app import create_app
 from config.service_settings import ServiceSettings
 from config.settings import get_multi_agent_settings
-from core.artifacts import atomic_json, file_hash
-from core.revisions import RevisionStore
-from core.jobs import JobStore
+from infrastructure.utils.artifacts import atomic_json, file_hash
+from infrastructure.persistence.revisions import RevisionStore
+from infrastructure.persistence.jobs import JobStore
 from workers.local import LocalWorker
 from test_cache_resume_revision_repair import FixtureCaller
 

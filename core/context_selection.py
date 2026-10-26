@@ -1,5 +1,5 @@
 """Pack atomic judge obligations; admission remains owned by the gateway."""
-from core.context_budget import ContextBudgetError
+from infrastructure.llm.context_budget import ContextBudgetError
 
 
 def generate_atomic_batches(caller, items, request_factory):

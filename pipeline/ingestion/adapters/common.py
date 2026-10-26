@@ -1,7 +1,7 @@
 import csv
 import hashlib
 from pathlib import Path
-from core.artifacts import atomic_json, file_hash
+from infrastructure.utils.artifacts import atomic_json, file_hash
 
 
 def base(source):

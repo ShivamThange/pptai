@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal
-from core.context_budget import ContextBudgetError
+from infrastructure.llm.context_budget import ContextBudgetError
 
 from pydantic import BaseModel, ConfigDict, Field
 

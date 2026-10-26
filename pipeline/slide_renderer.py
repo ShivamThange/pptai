@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from pptx import Presentation
-from core.quality_metadata import PREFIX
+from domain.evaluation.quality_metadata import PREFIX
 
 
 @dataclass(frozen=True)
@@ -87,7 +87,7 @@ def _clear_pngs(directory: Path) -> None:
 def render_pptx_slides(pptx_path: str | Path, output_dir: str | Path) -> RenderResult:
     """Serialize native rendering across worker and independent CLI processes."""
     from config.service_settings import get_service_settings
-    from core.artifacts import artifact_lock
+    from infrastructure.utils.artifacts import artifact_lock
     with artifact_lock(get_service_settings().root / ".locks" / "native-render.lock"):
         return _render_pptx_slides_isolated(pptx_path, output_dir)
 

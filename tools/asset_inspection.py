@@ -1,7 +1,7 @@
 """Bounded, path-free published-asset views. Never parsing or inference."""
 from pathlib import Path
-from core.asset_registry import AssetRegistry, AssetBindingError
-from core.artifacts import file_hash
+from domain.extraction.asset_registry import AssetRegistry, AssetBindingError
+from infrastructure.utils.artifacts import file_hash
 
 
 def public_representation(rep):

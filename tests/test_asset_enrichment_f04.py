@@ -1,9 +1,9 @@
 import json
 import pytest
 from PIL import Image
-from core.artifacts import file_hash, atomic_json
-from core.asset_registry import AssetRegistry
-from schemas.asset_schema import TableSelection
+from infrastructure.utils.artifacts import file_hash, atomic_json
+from domain.extraction.asset_registry import AssetRegistry
+from contracts.asset_schema import TableSelection
 from f04_helpers import enriched,FIXTURES
 
 
@@ -39,9 +39,9 @@ def test_sparse_hidden_full_sheet_and_cut_merge(tmp_path):
 
 @pytest.mark.parametrize('orientation',range(1,9))
 def test_orientation_derivative_preserves_original(tmp_path,orientation):
-    from schemas.raw_extraction_schema import SourceAsset,SourceLocation,RawExtraction
-    from pipeline.ingestion.asset_adapters import enrich_assets
-    from schemas.asset_schema import AssetOptions
+    from contracts.raw_extraction_schema import SourceAsset,SourceLocation,RawExtraction
+    from infrastructure.ingestion.asset_adapters import enrich_assets
+    from contracts.asset_schema import AssetOptions
     import shutil
     original=tmp_path/'source.jpg';shutil.copyfile(FIXTURES/f'oriented-{orientation}.jpg',original)
     digest=file_hash(original);ref='doc_fixture:image'

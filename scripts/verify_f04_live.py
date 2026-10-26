@@ -4,14 +4,14 @@ import json
 import sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT));sys.path.insert(0,str(ROOT/'scripts'))
-from core.artifacts import atomic_json,file_hash,sha256_value
-from core.revisions import copy_bundle
-from schemas.raw_extraction_schema import RawExtraction
-from schemas.asset_schema import AssetOptions
-from pipeline.asset_interpreter import interpret_assets,asset_insights_to_units
+from infrastructure.utils.artifacts import atomic_json,file_hash,sha256_value
+from infrastructure.persistence.revisions import copy_bundle
+from contracts.raw_extraction_schema import RawExtraction
+from contracts.asset_schema import AssetOptions
+from infrastructure.ingestion.asset_interpreter import interpret_assets,asset_insights_to_units
 from config.settings import resolve_environment,get_multi_agent_settings
-from core.llm_client import LLMClient,LLMRequestError
-from core.builder import PresentationBuilder
+from infrastructure.llm.llm_client import LLMClient,LLMRequestError
+from application.jobs.builder import PresentationBuilder
 from verify_r06_native import catalog,slides,render_checked
 
 

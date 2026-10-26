@@ -1,11 +1,11 @@
 from pathlib import Path
 import json
-from core.artifacts import parse_document_cached
-from pipeline.source_adapter import build_raw_extraction
-from pipeline.ingestion.collection import retain_sources
-from pipeline.ingestion.asset_adapters import enrich_assets
-from schemas.asset_schema import AssetOptions, AssetInsight, AssetEvidenceAnchor
-from pipeline.asset_interpreter import InterpretationDraft
+from infrastructure.utils.artifacts import parse_document_cached
+from infrastructure.ingestion.source_adapter import build_raw_extraction
+from infrastructure.ingestion.collection import retain_sources
+from infrastructure.ingestion.asset_adapters import enrich_assets
+from contracts.asset_schema import AssetOptions, AssetInsight, AssetEvidenceAnchor
+from infrastructure.ingestion.asset_interpreter import InterpretationDraft
 
 FIXTURES=Path(__file__).parent/'fixtures/assets'
 

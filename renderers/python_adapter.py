@@ -9,7 +9,7 @@ from pptx.util import Inches, Pt, Emu
 from pptx.enum.shapes import MSO_SHAPE, MSO_CONNECTOR
 from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE
 from pptx.oxml.ns import qn
-from core.artifacts import file_hash
+from infrastructure.utils.artifacts import file_hash
 from renderers.base import PresentationScene, RenderArtifact, validate_scene_assets
 from renderers.python_primitives import PythonPrimitives, hex_to_rgb
 from renderers.artifact import seal_native_metadata, verify_native_coverage

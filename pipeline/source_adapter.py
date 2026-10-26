@@ -10,8 +10,8 @@ from typing import Any, get_args
 
 from pydantic import ValidationError
 
-from core.artifacts import write_validated_json, atomic_json
-from schemas.raw_extraction_schema import (
+from infrastructure.utils.artifacts import write_validated_json, atomic_json
+from contracts.raw_extraction_schema import (
     RawExtraction,
     SourceAsset,
     SourceBlock,

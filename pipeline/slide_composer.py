@@ -7,19 +7,19 @@ import json
 from pathlib import Path
 from typing import Any
 
-from core.artifacts import write_validated_json, sha256_value, portable_value, dependency_fingerprint, caller_fingerprint, CheckpointCache
-from core.asset_registry import AssetRegistry, validate_asset_content
+from infrastructure.utils.artifacts import write_validated_json, sha256_value, portable_value, dependency_fingerprint, caller_fingerprint, CheckpointCache
+from domain.extraction.asset_registry import AssetRegistry, validate_asset_content
 from config.settings import get_multi_agent_settings
-from core.job_context import check, report
-from core.llm_client import LLMRequestError, LLMCancelledError
-from core.context_budget import ContextBudgetError
-from pipeline.storyboard_planner import build_layout_catalog
-from pipeline.visual_placement import ensure_planned_visual
-from schemas.ir1_schema import ValidatedIR1, ValidationResult
-from tools.claim_verification import check_numeric_text, mentions, SemanticBatch
-from tools.claim_verification import normalize as normalize_text
-from schemas.ir2_content_schema import SlideDraft, SlideSpec, TargetIR2Presentation
-from schemas.storyboard_schema import SlidePlan, Storyboard, TopicChunk
+from application.jobs.job_context import check, report
+from infrastructure.llm.llm_client import LLMRequestError, LLMCancelledError
+from infrastructure.llm.context_budget import ContextBudgetError
+from infrastructure.ingestion.storyboard_planner import build_layout_catalog
+from infrastructure.ingestion.visual_placement import ensure_planned_visual
+from contracts.ir1_schema import ValidatedIR1, ValidationResult
+from domain.evaluation.claim_verification import check_numeric_text, mentions, SemanticBatch
+from domain.evaluation.claim_verification import normalize as normalize_text
+from contracts.ir2_content_schema import SlideDraft, SlideSpec, TargetIR2Presentation
+from contracts.storyboard_schema import SlidePlan, Storyboard, TopicChunk
 
 
 class SlideCompositionError(RuntimeError):
@@ -200,9 +200,9 @@ def validate_slide_grounding(slide: SlideSpec, context: dict[str, Any]) -> dict[
     chart_registry = AssetRegistry(context.get('assets',[]),source_item_ids=context.get('source_item_ids',[]),
                                    asset_source_items=context.get('asset_source_items',[]))
     asset_findings = {}
-    from pipeline.asset_interpreter import validate_asset_insights
-    from schemas.raw_extraction_schema import RawExtraction, SourceBlock
-    from schemas.ir1_schema import KnowledgeUnit
+    from infrastructure.ingestion.asset_interpreter import validate_asset_insights
+    from contracts.raw_extraction_schema import RawExtraction, SourceBlock
+    from contracts.ir1_schema import KnowledgeUnit
     # Reconstruct the pinned original context from complete interpretation references.
     # Context packets are carried separately from generated summaries.
     raw_context = context.get('asset_raw_context')
@@ -315,7 +315,7 @@ async def judge_slide_claims(slide: SlideSpec, context: dict[str, Any], caller: 
                 'assets': [{**asset, 'content': {key: value for key, value in (asset.get('content') or {}).items()
                     if key not in {'interpretation', 'descriptions'}}} for asset in context.get('assets', [])]}}, ensure_ascii=False))
     try:
-        from core.context_selection import generate_atomic_batches_async
+        from domain.extraction.context_selection import generate_atomic_batches_async
         async for batch, result in generate_atomic_batches_async(caller, uncached_claims, request_for):
             result = SemanticBatch.model_validate(result.model_dump() if hasattr(result, 'model_dump') else result)
             ids = [item.unit_id for item in result.judgments]

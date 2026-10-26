@@ -9,18 +9,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from f04_helpers import AssetCaller, enriched  # noqa: E402
 
-from core.asset_registry import AssetRegistry  # noqa: E402
-from core.builder import PresentationBuilder  # noqa: E402
-from core.theme_engine import load_theme  # noqa: E402
-from pipeline.asset_interpreter import validate_asset_insights  # noqa: E402
-from pipeline.chunker import build_chunks  # noqa: E402
-from pipeline.knowledge_extractor import generate_validated_ir1  # noqa: E402
-from pipeline.quality_controller import run_deterministic_quality_checks  # noqa: E402
-from pipeline.slide_composer import retrieve_slide_context  # noqa: E402
-from pipeline.storyboard_planner import attach_asset_candidates, validate_storyboard  # noqa: E402
-from pipeline.visual_placement import ensure_planned_visual  # noqa: E402
-from schemas.ir2_content_schema import SlideSpec  # noqa: E402
-from schemas.storyboard_schema import SlidePlan, Storyboard  # noqa: E402
+from domain.extraction.asset_registry import AssetRegistry  # noqa: E402
+from application.jobs.builder import PresentationBuilder  # noqa: E402
+from domain.rendering.theme_engine import load_theme  # noqa: E402
+from infrastructure.ingestion.asset_interpreter import validate_asset_insights  # noqa: E402
+from infrastructure.ingestion.chunker import build_chunks  # noqa: E402
+from infrastructure.ingestion.knowledge_extractor import generate_validated_ir1  # noqa: E402
+from infrastructure.ingestion.quality_controller import run_deterministic_quality_checks  # noqa: E402
+from infrastructure.ingestion.slide_composer import retrieve_slide_context  # noqa: E402
+from infrastructure.ingestion.storyboard_planner import attach_asset_candidates, validate_storyboard  # noqa: E402
+from infrastructure.ingestion.visual_placement import ensure_planned_visual  # noqa: E402
+from contracts.ir2_content_schema import SlideSpec  # noqa: E402
+from contracts.storyboard_schema import SlidePlan, Storyboard  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 LAYOUTS = ROOT / "config" / "ppt_default_layouts.json"

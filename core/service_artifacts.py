@@ -1,8 +1,8 @@
 """Public views over R05 artifacts, never a second revision index."""
 import json
 from pathlib import Path
-from core.artifacts import file_hash
-from core.revisions import RevisionStore
+from infrastructure.utils.artifacts import file_hash
+from infrastructure.persistence.revisions import RevisionStore
 
 
 def published_ancestry(output_dir):
@@ -47,7 +47,7 @@ def revision_view(deck_id, path, record):
     sources = []
     manifest_path = path / 'source_manifest.json'
     if manifest_path.is_file():
-        from schemas.ingestion_schema import ParseResult
+        from contracts.ingestion_schema import ParseResult
         manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
         for member in manifest.get('members', []):
             result_path = (path / member['bundle_directory'] / 'parse_result.json').resolve()

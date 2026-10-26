@@ -12,8 +12,8 @@ from typing import Iterable, Literal
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
-from schemas.ir1_schema import EvidenceRef, KnowledgeUnit, MetricFact
-from tools.claim_verification import mentions, normalize
+from contracts.ir1_schema import EvidenceRef, KnowledgeUnit, MetricFact
+from domain.evaluation.claim_verification import mentions, normalize
 
 NEGATION_TERMS = frozenset({"not", "no", "never", "none", "neither", "nor", "cannot"})
 OPPOSING_VERB_PAIRS = [

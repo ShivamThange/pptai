@@ -3,8 +3,8 @@ from pathlib import Path
 from math import cos, sin, radians
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
-from core.quality_metadata import read_metadata
-from core.chart_content import native_series_name
+from domain.evaluation.quality_metadata import read_metadata
+from domain.rendering.chart_content import native_series_name
 
 EMU = 914400
 

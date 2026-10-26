@@ -2,9 +2,9 @@
 import json
 import hashlib
 from pathlib import Path
-from core.artifacts import file_hash
-from pipeline.source_adapter import adapt_structural_ir
-from schemas.ingestion_schema import IngestionError
+from infrastructure.utils.artifacts import file_hash
+from infrastructure.ingestion.source_adapter import adapt_structural_ir
+from contracts.ingestion_schema import IngestionError
 
 
 def validate_ingestion(path, *, require_complete=True):

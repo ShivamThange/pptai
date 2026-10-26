@@ -15,7 +15,7 @@ from typing import Any, Literal, Protocol
 from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from core.asset_registry import AssetBindingError, AssetRegistry, validate_asset_content
+from domain.extraction.asset_registry import AssetBindingError, AssetRegistry, validate_asset_content
 
 
 class Box(BaseModel):
@@ -417,7 +417,7 @@ def legacy_ir2_to_scene(content: dict, layouts: dict, registry=None, search_dirs
             elif kind == "table":
                 if c.get("source_asset_id") and not c.get("rows"):
                     import json
-                    from pipeline.source_adapter import normalize_table_data
+                    from infrastructure.ingestion.source_adapter import normalize_table_data
                     filename = c["source_asset_id"]
                     path = resolve_asset_path(filename if filename.endswith(".json") else filename + ".json", search_dirs=list(search_dirs))
                     if not path:

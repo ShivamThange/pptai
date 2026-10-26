@@ -3,8 +3,8 @@ import copy
 import json
 import shutil
 from pathlib import Path
-from core.artifacts import atomic_json, file_hash, sha256_value, artifact_lock
-from schemas.ingestion_schema import IngestionError
+from infrastructure.utils.artifacts import atomic_json, file_hash, sha256_value, artifact_lock
+from contracts.ingestion_schema import IngestionError
 
 
 def assemble(members, output):
