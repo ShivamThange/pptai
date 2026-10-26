@@ -9,12 +9,12 @@ import time
 from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, Form, Path as RoutePath
 from fastapi.responses import FileResponse, StreamingResponse
-from core.jobs import new_id, now
-from schemas.ingestion_schema import UploadSpec, SourceSelection, IngestionError
-from pipeline.ingestion.detection import detect, EXTENSIONS
-from core.revisions import RevisionStore, StaleRevisionError
-from core.service_artifacts import published_ancestry, published_revision, revision_view, parsing_summary
-from schemas.service_schema import DeckRequest, EditRequest, GenerationRequest, ParseRequest, TERMINAL_STATUSES
+from infrastructure.persistence.jobs import new_id, now
+from contracts.ingestion_schema import UploadSpec, SourceSelection, IngestionError
+from infrastructure.ingestion.detection import detect, EXTENSIONS
+from infrastructure.persistence.revisions import RevisionStore, StaleRevisionError
+from infrastructure.utils.service_artifacts import published_ancestry, published_revision, revision_view, parsing_summary
+from contracts.service_schema import DeckRequest, EditRequest, GenerationRequest, ParseRequest, TERMINAL_STATUSES
 
 router = APIRouter()
 SUPPORTED_EXTENSIONS = set(EXTENSIONS)
@@ -104,7 +104,7 @@ def worker_status(request: Request):
 @router.get('/config')
 def effective_config(request: Request):
     """Non-secret effective provider configuration for the Studio UI."""
-    from core.theme_engine import available_themes, LENS_THEME_MAP
+    from domain.rendering.theme_engine import available_themes, LENS_THEME_MAP
     provider = request.app.state.provider_settings
     return {"provider": provider.provider, "model": provider.model,
             "evaluator": {"provider": provider.evaluator_provider, "model": provider.evaluator_model},
@@ -328,8 +328,8 @@ def artifact_headers(record):
 
 def asset_registry(request, deck_id, revision_id):
     path,record=pinned(request,deck_id,revision_id)
-    from schemas.ir1_schema import ValidatedIR1
-    from core.asset_registry import AssetRegistry
+    from contracts.ir1_schema import ValidatedIR1
+    from domain.extraction.asset_registry import AssetRegistry
     try:
         ir1=ValidatedIR1.model_validate_json((path/'ir1_validated.json').read_text(encoding='utf-8'))
         registry=AssetRegistry(ir1.assets,run_root=path,source_item_ids=ir1.source_item_ids,asset_source_items=ir1.asset_source_items)
@@ -341,7 +341,7 @@ def asset_registry(request, deck_id, revision_id):
 @router.get('/decks/{deck_id}/revisions/{revision_id}/assets')
 def assets(deck_id: str, revision_id: str, request: Request, kind: str | None=None,
            offset: int=0,limit: int=50):
-    from tools.asset_inspection import list_assets
+    from domain.evaluation.asset_inspection import list_assets
     registry,_=asset_registry(request,deck_id,revision_id)
     if kind not in {None,'image','table','formula','chart'} or offset<0 or not 1<=limit<=100:
         raise HTTPException(422,'Invalid asset page parameters')
@@ -350,7 +350,7 @@ def assets(deck_id: str, revision_id: str, request: Request, kind: str | None=No
 
 @router.get('/decks/{deck_id}/revisions/{revision_id}/assets/detail')
 def asset_detail(deck_id: str, revision_id: str, request: Request, asset_id: str):
-    from tools.asset_inspection import inspect_asset
+    from domain.evaluation.asset_inspection import inspect_asset
     registry,_=asset_registry(request,deck_id,revision_id)
     try:
         return inspect_asset(registry,asset_id)
@@ -362,7 +362,7 @@ def asset_detail(deck_id: str, revision_id: str, request: Request, asset_id: str
 
 @router.get('/decks/{deck_id}/revisions/{revision_id}/assets/file')
 def asset_download(deck_id: str, revision_id: str, request: Request, asset_id: str, representation_id: str):
-    from tools.asset_inspection import asset_file
+    from domain.evaluation.asset_inspection import asset_file
     registry,record=asset_registry(request,deck_id,revision_id)
     try:
         path,media=asset_file(registry,asset_id,representation_id)

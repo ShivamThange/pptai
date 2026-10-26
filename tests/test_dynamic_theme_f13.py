@@ -6,8 +6,8 @@ import pytest
 from pptx import Presentation
 from pptx.util import Pt
 
-from core.builder import PresentationBuilder
-from core.theme_engine import (LENS_THEME_MAP, apply_theme_to_ir2, available_themes,
+from application.jobs.builder import PresentationBuilder
+from domain.rendering.theme_engine import (LENS_THEME_MAP, apply_theme_to_ir2, available_themes,
                                load_theme, resolve_theme_name)
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -173,13 +173,13 @@ def test_options_reject_unknown_theme(tmp_path):
         sys.modules["google"] = google
         sys.modules["google.genai"] = genai
         sys.modules["google.genai.types"] = genai.types
-    from pipeline.orchestrator import MultiAgentOptions
+    from application.pipeline.orchestrator import MultiAgentOptions
     with pytest.raises(ValueError, match="Unknown theme"):
         MultiAgentOptions(layouts_path=str(LAYOUTS), output_dir=str(tmp_path), theme="nonsense")
 
 
 def test_generation_request_validates_theme():
-    from schemas.service_schema import GenerationRequest
+    from contracts.service_schema import GenerationRequest
     request = GenerationRequest(theme="dark_tech")
     assert request.theme == "dark_tech"
     with pytest.raises(ValueError, match="Unknown theme"):

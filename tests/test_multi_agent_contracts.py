@@ -5,24 +5,24 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from core.llm_client import LLMClient
-from core.revisions import active_artifacts, RevisionStore
-from core.artifacts import portable_value
-from pipeline.chunker import build_chunks, write_chunks
-from pipeline.knowledge_extractor import (
+from infrastructure.llm.llm_client import LLMClient
+from infrastructure.persistence.revisions import active_artifacts, RevisionStore
+from infrastructure.utils.artifacts import portable_value
+from infrastructure.ingestion.chunker import build_chunks, write_chunks
+from infrastructure.ingestion.knowledge_extractor import (
     KnowledgeUnitBatch,
     KnowledgeUnitDraft,
     generate_validated_ir1,
     validate_knowledge_units,
 )
-from pipeline.orchestrator import MultiAgentOptions, run_multi_agent_pipeline
-from pipeline.slide_editor import edit_multi_agent_slide
-from pipeline.slide_composer import compose_presentation_parallel, validate_slide_spec
-from pipeline.source_adapter import adapt_structural_ir, build_raw_extraction
-from pipeline.storyboard_planner import validate_storyboard
-from schemas.ir1_schema import EvidenceRef, KnowledgeUnit, ValidatedIR1
-from schemas.ir2_content_schema import SlideSpec
-from schemas.storyboard_schema import SlidePlan, Storyboard
+from application.pipeline.orchestrator import MultiAgentOptions, run_multi_agent_pipeline
+from application.services.slide_editor import edit_multi_agent_slide
+from infrastructure.ingestion.slide_composer import compose_presentation_parallel, validate_slide_spec
+from infrastructure.ingestion.source_adapter import adapt_structural_ir, build_raw_extraction
+from infrastructure.ingestion.storyboard_planner import validate_storyboard
+from contracts.ir1_schema import EvidenceRef, KnowledgeUnit, ValidatedIR1
+from contracts.ir2_content_schema import SlideSpec
+from contracts.storyboard_schema import SlidePlan, Storyboard
 
 
 class _LLMResponseModel(BaseModel):
@@ -267,8 +267,8 @@ def test_storyboard_and_slide_contracts_reject_invalid_bindings():
 
 @pytest.mark.parametrize("repairs", [True, False])
 def test_storyboard_repairs_invalid_chunk_binding_with_bounded_feedback(repairs):
-    from pipeline.storyboard_planner import plan_storyboard
-    from schemas.storyboard_schema import TopicChunk
+    from infrastructure.ingestion.storyboard_planner import plan_storyboard
+    from contracts.storyboard_schema import TopicChunk
     units = [KnowledgeUnit(unit_id=key, kind="concept", title="Context", summary="Source context.", section_path=["Context"],
                            evidence=[EvidenceRef(source_id="b", excerpt="Source context.")],
                            validation_status="VALIDATED") for key in ("u1", "u2")]
@@ -297,8 +297,8 @@ def test_storyboard_repairs_invalid_chunk_binding_with_bounded_feedback(repairs)
 
 
 def test_storyboard_derives_missing_chunks_for_known_selected_units():
-    from pipeline.storyboard_planner import plan_storyboard
-    from schemas.storyboard_schema import TopicChunk
+    from infrastructure.ingestion.storyboard_planner import plan_storyboard
+    from contracts.storyboard_schema import TopicChunk
     unit = KnowledgeUnit(unit_id="u", kind="concept", title="Context", summary="Source context.", section_path=["Context"],
                          evidence=[EvidenceRef(source_id="b", excerpt="Source context.")], validation_status="VALIDATED")
     ir1 = ValidatedIR1(document_title="Paper", units=[unit])
@@ -314,8 +314,8 @@ def test_storyboard_derives_missing_chunks_for_known_selected_units():
 
 
 def test_storyboard_planner_includes_user_instruction():
-    from pipeline.storyboard_planner import plan_storyboard
-    from schemas.storyboard_schema import TopicChunk
+    from infrastructure.ingestion.storyboard_planner import plan_storyboard
+    from contracts.storyboard_schema import TopicChunk
     unit = KnowledgeUnit(unit_id="u", kind="concept", title="Context", summary="Source context.", section_path=["Context"],
                          evidence=[EvidenceRef(source_id="b", excerpt="Source context.")], validation_status="VALIDATED")
     ir1 = ValidatedIR1(document_title="Paper", units=[unit])

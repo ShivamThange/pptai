@@ -1,14 +1,14 @@
 import asyncio
 import copy
 import pytest
-from core.artifacts import file_hash
-from pipeline.knowledge_extractor import generate_validated_ir1
-from pipeline.asset_interpreter import asset_insights_to_units, validate_asset_insights, build_asset_context, interpret_assets
-from pipeline.slide_composer import retrieve_slide_context, validate_slide_grounding, compose_single_slide
-from pipeline.chunker import build_chunks
-from schemas.asset_schema import AssetOptions
-from schemas.ir2_content_schema import SlideSpec
-from schemas.storyboard_schema import SlidePlan,Storyboard,TopicChunk
+from infrastructure.utils.artifacts import file_hash
+from infrastructure.ingestion.knowledge_extractor import generate_validated_ir1
+from infrastructure.ingestion.asset_interpreter import asset_insights_to_units, validate_asset_insights, build_asset_context, interpret_assets
+from infrastructure.ingestion.slide_composer import retrieve_slide_context, validate_slide_grounding, compose_single_slide
+from infrastructure.ingestion.chunker import build_chunks
+from contracts.asset_schema import AssetOptions
+from contracts.ir2_content_schema import SlideSpec
+from contracts.storyboard_schema import SlidePlan,Storyboard,TopicChunk
 from f04_helpers import enriched,AssetCaller
 
 
@@ -68,7 +68,7 @@ def test_disabled_understanding_zero_calls(tmp_path):
 
 @pytest.mark.parametrize('statement',['the method improves performance by 20%','the diagram causes better accuracy','the result is statistically significant'])
 def test_visual_inferences_cannot_establish_numbers_or_causality(tmp_path,statement):
-    from schemas.asset_schema import AssetInsight,AssetEvidenceAnchor,AssetInterpretation
+    from contracts.asset_schema import AssetInsight,AssetEvidenceAnchor,AssetInterpretation
     raw,root,_=enriched('results.csv',tmp_path)
     asset=raw.assets[0];packet=build_asset_context(raw,asset.asset_id)
     refs=[c['source_id'] for c in packet['context']]
@@ -87,7 +87,7 @@ def test_capacity_limit_is_explicit_not_semantic_success(tmp_path):
 
 
 def test_verified_native_chart_comparison_is_original_data_knowledge(tmp_path):
-    from schemas.asset_schema import AssetInsight,AssetEvidenceAnchor,AssetInterpretation
+    from contracts.asset_schema import AssetInsight,AssetEvidenceAnchor,AssetInterpretation
     raw,root,_=enriched('charts.xlsx',tmp_path)
     asset=next(a for a in raw.assets if a.kind=='chart')
     packet=build_asset_context(raw,asset.asset_id);refs=[c['source_id'] for c in packet['context']]
@@ -108,7 +108,7 @@ def test_structured_generation_rejects_unbound_chart_without_assets():
 
 
 def test_native_chart_grounding_resolves_verified_dataset(tmp_path):
-    from tools.chart_binding import resolve_chart
+    from domain.evaluation.chart_binding import resolve_chart
     raw,root,_=enriched('charts.xlsx',tmp_path)
     chart=next(a for a in raw.assets if a.kind=='chart')
     slide=SlideSpec(layout='fixture',content={'body':{'type':'chart',**resolve_chart(chart)}})

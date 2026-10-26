@@ -1,0 +1,9 @@
+sentence-transformers
+scikit-learn
+PyYAML
+python-pptx
+numpy
+pandas
+google-genai>=2.8,<3
+pydantic>=2,<3
+jsonschema>=4,<5

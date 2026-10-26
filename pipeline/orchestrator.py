@@ -11,24 +11,24 @@ from dataclasses import dataclass, replace, asdict, field
 from pathlib import Path
 from typing import Any
 
-from core.artifacts import read_validated_json, sha256_value, update_manifest, file_hash, portable_value, dependency_fingerprint, caller_fingerprint, CheckpointCache, artifact_lock, atomic_json
-from core.revisions import RevisionStore, StaleRevisionError
-from core.job_context import check, report
-from core.builder import PresentationBuilder
-from core.asset_registry import AssetRegistry
-from core.llm_client import LLMClient, LLMRequestError
-from core.llm_run import observe_llm_run
-from pipeline.chunker import build_chunks, write_chunks
-from pipeline.knowledge_extractor import generate_validated_ir1
-from pipeline.quality_controller import assess_final_artifact, write_quality_report, artifact_hash
-from pipeline.slide_composer import compose_presentation_parallel, compose_single_slide, retrieve_slide_context, write_ir2, validate_slide_grounding, validate_slide_spec, slide_cache_key
-from pipeline.source_adapter import build_raw_extraction
-from pipeline.storyboard_planner import plan_storyboard, write_storyboard
-from schemas.ir1_schema import ValidatedIR1
-from schemas.ir2_content_schema import TargetIR2Presentation
-from schemas.raw_extraction_schema import RawExtraction
-from schemas.asset_schema import AssetOptions
-from schemas.storyboard_schema import Storyboard, TopicChunk
+from infrastructure.utils.artifacts import read_validated_json, sha256_value, update_manifest, file_hash, portable_value, dependency_fingerprint, caller_fingerprint, CheckpointCache, artifact_lock, atomic_json
+from infrastructure.persistence.revisions import RevisionStore, StaleRevisionError
+from application.jobs.job_context import check, report
+from application.jobs.builder import PresentationBuilder
+from domain.extraction.asset_registry import AssetRegistry
+from infrastructure.llm.llm_client import LLMClient, LLMRequestError
+from infrastructure.llm.llm_run import observe_llm_run
+from infrastructure.ingestion.chunker import build_chunks, write_chunks
+from infrastructure.ingestion.knowledge_extractor import generate_validated_ir1
+from infrastructure.ingestion.quality_controller import assess_final_artifact, write_quality_report, artifact_hash
+from infrastructure.ingestion.slide_composer import compose_presentation_parallel, compose_single_slide, retrieve_slide_context, write_ir2, validate_slide_grounding, validate_slide_spec, slide_cache_key
+from infrastructure.ingestion.source_adapter import build_raw_extraction
+from infrastructure.ingestion.storyboard_planner import plan_storyboard, write_storyboard
+from contracts.ir1_schema import ValidatedIR1
+from contracts.ir2_content_schema import TargetIR2Presentation
+from contracts.raw_extraction_schema import RawExtraction
+from contracts.asset_schema import AssetOptions
+from contracts.storyboard_schema import Storyboard, TopicChunk
 
 UNSPECIFIED_BASE = object()
 
@@ -58,7 +58,7 @@ class MultiAgentOptions:
     def __post_init__(self):
         if not isinstance(self.asset_options, AssetOptions):
             object.__setattr__(self, 'asset_options', AssetOptions.model_validate(self.asset_options))
-        from core.theme_engine import available_themes
+        from domain.rendering.theme_engine import available_themes
         if self.theme != "auto" and self.theme not in available_themes():
             raise ValueError(f"Unknown theme '{self.theme}'. Available: auto, {', '.join(sorted(available_themes()))}")
 
@@ -94,8 +94,8 @@ def run_multi_agent_pipeline(
     structural_hash = structural_fingerprint(structural_ir_path)
     preference = {key: value for key, value in asdict(options).items() if key not in {"output_dir", "resume", "layouts_path", "max_concurrency"}}
     preference['asset_options'] = options.asset_options.model_dump(mode='json')
-    from core.formula_renderer import formula_identity
-    from core.theme_engine import load_theme, theme_signature
+    from domain.rendering.formula_renderer import formula_identity
+    from domain.rendering.theme_engine import load_theme, theme_signature
     resolved_theme = load_theme(options.theme, options.lens)
     signature = sha256_value({"source": structural_hash, "preferences": preference,
                               'asset_runtime': formula_identity() if options.asset_options.mode=='structured' else None,
@@ -120,7 +120,7 @@ def run_multi_agent_pipeline(
         work = store.root / ".work" / signature
         work.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(structural_ir_path, work / "structural_ir_snapshot.json")
-        from pipeline.ingestion.collection import retain_sources
+        from infrastructure.ingestion.collection import retain_sources
         retain_sources(structural_ir_path, work)
         job_id = job_id or uuid.uuid4().hex
         job = {"schema_version": 1, "job_id": job_id, "operation": "generation", "status": "RUNNING",
@@ -283,7 +283,7 @@ def _run_multi_agent_pipeline(
     output_dir.mkdir(parents=True, exist_ok=True)
     layouts_path = Path(options.layouts_path)
     layouts_spec = json.loads(layouts_path.read_text(encoding="utf-8"))
-    from core.theme_engine import load_theme
+    from domain.rendering.theme_engine import load_theme
     resolved_theme = load_theme(options.theme, options.lens)
     manifest_path = output_dir / "run_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
@@ -323,8 +323,8 @@ def _run_multi_agent_pipeline(
 
     client = caller or LLMClient()
     if options.asset_options.mode == 'structured':
-        from pipeline.ingestion.asset_adapters import enrich_assets
-        from core.formula_renderer import formula_identity
+        from infrastructure.ingestion.asset_adapters import enrich_assets
+        from domain.rendering.formula_renderer import formula_identity
         base_path = output_dir / 'raw_extraction_base.json'
         if raw.schema_version == '4' and base_path.is_file():
             raw = read_validated_json(base_path, RawExtraction)
@@ -332,7 +332,7 @@ def _run_multi_agent_pipeline(
                             'dependencies': runtime_dependencies(), 'model': caller_fingerprint(client),
                             'math': formula_identity()})
         manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
-        from pipeline.ingestion.asset_adapters import load_source_bundles
+        from infrastructure.ingestion.asset_adapters import load_source_bundles
         load_source_bundles(structural_ir_path,output_dir)
         cache_valid = options.resume and _stage_matches(manifest, 'asset_enrichment', key, output_dir / 'asset_enrichment.json')
         if cache_valid:
@@ -467,7 +467,7 @@ def _run_multi_agent_pipeline(
                 key = slide_cache_key(plan, slide_context, layouts_spec, client, 0)
                 cached = cache.get(key)
                 if cached is not None:
-                    from schemas.ir2_content_schema import SlideSpec
+                    from contracts.ir2_content_schema import SlideSpec
                     candidate = SlideSpec.model_validate(cached)
                     validate_slide_spec(candidate, layouts_spec, allowed_unit_ids=set(plan.source_unit_ids),
                                         assets=slide_context["assets"], source_item_ids=slide_context["source_item_ids"], asset_source_items=slide_context.get("asset_source_items", []))
@@ -533,7 +533,7 @@ def _run_multi_agent_pipeline(
     os.replace(candidate_path, pptx_path)
     write_quality_report(final_report, output_dir)
     (output_dir / "vision_audit_report.json").write_text(final_report.judge.model_dump_json(indent=2), encoding="utf-8")
-    from tools.claim_verification import build_verification_report
+    from domain.evaluation.claim_verification import build_verification_report
     atomic_json(output_dir / "verification_report.json", build_verification_report(ir1, ir2, profile="deep" if options.deep_verification else "basic"))
     _record_stage(manifest_path, "pptx", input_hash=sha256_value(ir2.model_dump()), output=pptx_path)
     usage = getattr(client, "usage", None)

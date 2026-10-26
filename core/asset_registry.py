@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Iterable, Any
 
 from PIL import Image
-from schemas.raw_extraction_schema import SourceAsset, TableAssetData
+from contracts.raw_extraction_schema import SourceAsset, TableAssetData
 
 
 class AssetBindingError(ValueError):
@@ -45,8 +45,8 @@ class AssetRegistry:
             self.assets[asset.asset_id] = asset
 
     def validate_derivation(self, asset_id):
-        from core.artifacts import file_hash
-        from schemas.asset_schema import AssetSourceItem
+        from infrastructure.utils.artifacts import file_hash
+        from contracts.asset_schema import AssetSourceItem
         asset = self.assets[asset_id]
         visiting = set()
         def visit(aid):
@@ -69,8 +69,8 @@ class AssetRegistry:
                     if self.run_root and not path.is_relative_to(self.run_root) or not path.is_file() or file_hash(path)!=rep.sha256:
                         raise AssetBindingError('ASSET_INTEGRITY_ERROR: representation missing/changed')
                 if value.content.kind=='table':
-                    from pipeline.ingestion.asset_adapters_tables import table_content
-                    from pipeline.source_adapter import normalize_table_data
+                    from infrastructure.ingestion.asset_adapters_tables import table_content
+                    from infrastructure.ingestion.source_adapter import normalize_table_data
                     import json
                     if normalize_table_data(json.loads(Path(value.file_path).read_text(encoding='utf-8')))!=value.data:
                         raise AssetBindingError('ASSET_INTEGRITY_ERROR: table metadata differs from source bytes')
@@ -91,7 +91,7 @@ class AssetRegistry:
             if value is None:
                 raise AssetBindingError('INVALID_ASSET_PROVENANCE: unresolved original OOXML item')
             item=AssetSourceItem.model_validate(value.model_dump() if hasattr(value,'model_dump') else value)
-            from core.artifacts import sha256_value
+            from infrastructure.utils.artifacts import sha256_value
             part=(item.embedded_package_part+'!' if item.embedded_package_part else '')+item.part
             expected_id=item.document_id+':ooxml:'+part+':'+sha256_value(item.xml_path)[:20]
             if item.document_id!=asset.document_id or item.source_id!=ref or ref!=expected_id or \
@@ -119,7 +119,7 @@ class AssetRegistry:
                     if len(found)!=1 or hashlib.sha256(etree.tostring(found[0])).hexdigest()!=item.snippet_sha256:
                         raise ValueError('Original XML node mismatch')
                     if item.embedded_sha256 and not item.embedded_package_part:
-                        from pipeline.ingestion.asset_adapters_ooxml import relationships
+                        from infrastructure.ingestion.asset_adapters_ooxml import relationships
                         targets=relationships(package,item.part)
                         target=targets.get(item.relationship_chain[-1])
                         if not target or hashlib.sha256(package.read(target)).hexdigest()!=item.embedded_sha256:
@@ -140,11 +140,11 @@ class AssetRegistry:
         return rep
 
     def select_table(self, asset_id, selection=None):
-        from pipeline.ingestion.asset_adapters_tables import select_table
+        from infrastructure.ingestion.asset_adapters_tables import select_table
         return select_table(self.require(asset_id,'table'),selection)
 
     def resolve_chart(self, asset_id, supplied=None):
-        from tools.chart_binding import resolve_chart
+        from domain.evaluation.chart_binding import resolve_chart
         return resolve_chart(self.require(asset_id,'chart'),supplied)
 
     def require(self, asset_id: str | None, kind: str) -> SourceAsset:
@@ -238,7 +238,7 @@ class AssetRegistry:
                     f"Table {asset_id} lacks source-cell references; re-extract legacy input"
                 )
             import json
-            from pipeline.source_adapter import normalize_table_data
+            from infrastructure.ingestion.source_adapter import normalize_table_data
 
             try:
                 file_data = normalize_table_data(

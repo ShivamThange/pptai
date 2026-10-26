@@ -9,17 +9,17 @@ from contextlib import contextmanager
 from pathlib import Path
 from config.service_settings import get_service_settings
 from config.settings import get_multi_agent_settings, resolve_environment
-from core.artifacts import artifact_lock, file_hash
-from core.job_context import JobContext
-from core.jobs import JobStore
-from core.llm_client import LLMClient, LLMRequestError, RpmLimiter
-from core.context_budget import ContextBudgetError
-from core.revisions import StaleRevisionError, RevisionStore
-from core.service_artifacts import revision_view, parsing_summary
+from infrastructure.utils.artifacts import artifact_lock, file_hash
+from application.jobs.job_context import JobContext
+from infrastructure.persistence.jobs import JobStore
+from infrastructure.llm.llm_client import LLMClient, LLMRequestError, RpmLimiter
+from infrastructure.llm.context_budget import ContextBudgetError
+from infrastructure.persistence.revisions import StaleRevisionError, RevisionStore
+from infrastructure.utils.service_artifacts import revision_view, parsing_summary
 from pipeline import service
-from pipeline.orchestrator import MultiAgentOptions
-from schemas.service_schema import GenerationRequest, ParseRequest, EditRequest
-from schemas.ingestion_schema import IngestionError
+from application.pipeline.orchestrator import MultiAgentOptions
+from contracts.service_schema import GenerationRequest, ParseRequest, EditRequest
+from contracts.ingestion_schema import IngestionError
 
 log = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ class LocalWorker:
             self.store.parse_outcome(identifier, result)
         def parsed(identifier, path):
             import json
-            from schemas.ingestion_schema import ParseResult
+            from contracts.ingestion_schema import ParseResult
             selection = next((s for s in captured if s['document_id'] == identifier), None)
             for upload_id in (selection.get('upload_ids') if selection else None) or [identifier]:
                 self.store.parsed(upload_id, path)
@@ -123,7 +123,7 @@ class LocalWorker:
                     limits=self.settings, context=context, on_parsed=lambda path: parsed(document['id'], path))
                 result_path = path.parent / 'parse_result.json'
                 if result_path.is_file():
-                    from schemas.ingestion_schema import ParseResult
+                    from contracts.ingestion_schema import ParseResult
                     result = ParseResult.model_validate_json(result_path.read_text(encoding='utf-8')).public()
                     result['upload_id'] = document['id']
                     outcome(document['id'], result)
@@ -156,7 +156,7 @@ class LocalWorker:
                         on_parsed=lambda path: parsed(document['id'], path))
                     result_path = Path(self.store.document(document['id'])['structural_ir_path']).parent / 'parse_result.json'
                     if result_path.is_file():
-                        from schemas.ingestion_schema import ParseResult
+                        from contracts.ingestion_schema import ParseResult
                         outcome(document['id'], ParseResult.model_validate_json(result_path.read_text(encoding='utf-8')).public())
                 except IngestionError as error:
                     if error.result:

@@ -19,21 +19,21 @@ from docling_core.types.doc import (
     Size,
 )
 
-from core.asset_registry import AssetRegistry, AssetBindingError
-from core.builder import PresentationBuilder
-from pipeline.stage1_docling_parser import export_docling_document
-from pipeline.source_adapter import (
+from domain.extraction.asset_registry import AssetRegistry, AssetBindingError
+from application.jobs.builder import PresentationBuilder
+from infrastructure.ingestion.stage1_docling_parser import export_docling_document
+from infrastructure.ingestion.source_adapter import (
     adapt_structural_ir,
     build_raw_extraction,
     normalize_table_data,
 )
-from pipeline.knowledge_extractor import (
+from infrastructure.ingestion.knowledge_extractor import (
     build_legacy_projection,
     validate_knowledge_units,
 )
-from pipeline.slide_composer import validate_slide_spec
-from schemas.ir1_schema import ValidatedIR1, KnowledgeUnit, EvidenceRef
-from schemas.ir2_content_schema import SlideSpec
+from infrastructure.ingestion.slide_composer import validate_slide_spec
+from contracts.ir1_schema import ValidatedIR1, KnowledgeUnit, EvidenceRef
+from contracts.ir2_content_schema import SlideSpec
 
 
 def _prov(page=1, text=""):
@@ -490,18 +490,18 @@ def test_staging_does_not_overwrite_assets_with_the_same_basename(tmp_path):
 
 def test_retrieved_asset_metadata_survives_composition_repair_and_edit(source_run):
     import asyncio
-    from core.artifacts import write_validated_json
-    from pipeline.chunker import build_chunks, write_chunks
-    from pipeline.slide_composer import (
+    from infrastructure.utils.artifacts import write_validated_json
+    from infrastructure.ingestion.chunker import build_chunks, write_chunks
+    from infrastructure.ingestion.slide_composer import (
         retrieve_slide_context,
         compose_single_slide,
         SlideCompositionError,
         write_ir2,
     )
-    from pipeline.slide_editor import edit_multi_agent_slide, import_legacy_revision
-    from core.revisions import active_artifacts
-    from schemas.ir2_content_schema import TargetIR2Presentation
-    from schemas.storyboard_schema import SlidePlan, Storyboard
+    from application.services.slide_editor import edit_multi_agent_slide, import_legacy_revision
+    from infrastructure.persistence.revisions import active_artifacts
+    from contracts.ir2_content_schema import TargetIR2Presentation
+    from contracts.storyboard_schema import SlidePlan, Storyboard
 
     _, raw, run = source_run
     image = next(asset for asset in raw.assets if asset.kind == "image")

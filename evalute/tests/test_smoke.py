@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pptx import Presentation
 
-from evalute.metrics.faithfulness import _claims
+from evaluation.metrics.faithfulness import _claims
 
 ROOT = Path(__file__).parents[2]
 

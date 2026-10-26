@@ -2,14 +2,14 @@
 import io
 import re
 from pathlib import Path
-from core.artifacts import atomic_json
-from schemas.ingestion_schema import IngestionError, ParseFinding
-from core.job_context import check
-from pipeline.ingestion.detection import decode_text
+from infrastructure.utils.artifacts import atomic_json
+from contracts.ingestion_schema import IngestionError, ParseFinding
+from application.jobs.job_context import check
+from infrastructure.ingestion.detection import decode_text
 
 
 def extract(source, output, options, *, context=None, limits=None):
-    from pipeline.stage1_docling_parser import run_docling_extraction
+    from infrastructure.ingestion.stage1_docling_parser import run_docling_extraction
     run_docling_extraction(str(source), str(output), use_gpu=options.effective_device == 'cuda', resolved_options=options,
                            context=context, limits=limits)
     import json
@@ -22,7 +22,7 @@ def convert(source, output, options, *, context=None, limits=None):
     from docling.datamodel.pipeline_options import PdfPipelineOptions, AcceleratorOptions, AcceleratorDevice, RapidOcrOptions, OcrMode
     from docling.datamodel.backend_options import MarkdownBackendOptions
     from docling.datamodel.document import DocumentStream
-    from pipeline.stage1_docling_parser import export_docling_document
+    from infrastructure.ingestion.stage1_docling_parser import export_docling_document
     kind = options.resolved_type
     formats = {'pdf': InputFormat.PDF, 'docx': InputFormat.DOCX, 'markdown': InputFormat.MD,
                'png': InputFormat.IMAGE, 'jpeg': InputFormat.IMAGE}

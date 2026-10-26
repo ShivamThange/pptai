@@ -5,10 +5,10 @@ import re
 from pathlib import Path
 from zipfile import ZipFile
 from lxml import etree as ET
-from core.artifacts import atomic_json, file_hash, sha256_value
-from core.job_context import check
-from schemas.asset_schema import AssetSourceItem, ChartAssetContent, ChartPointBinding, FormulaAssetContent
-from schemas.raw_extraction_schema import SourceAsset, SourceLocation
+from infrastructure.utils.artifacts import atomic_json, file_hash, sha256_value
+from application.jobs.job_context import check
+from contracts.asset_schema import AssetSourceItem, ChartAssetContent, ChartPointBinding, FormulaAssetContent
+from contracts.raw_extraction_schema import SourceAsset, SourceLocation
 from .asset_adapters_tables import rich_cell, table_content
 
 NS = {'c':'http://schemas.openxmlformats.org/drawingml/2006/chart',

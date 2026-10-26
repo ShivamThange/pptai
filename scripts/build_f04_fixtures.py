@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from core.artifacts import atomic_json, file_hash
+from infrastructure.utils.artifacts import atomic_json, file_hash
 
 
 def build(directory=None):

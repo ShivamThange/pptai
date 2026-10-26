@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from core.artifacts import artifact_lock, atomic_json, file_hash, sha256_value, portable_value
+from infrastructure.utils.artifacts import artifact_lock, atomic_json, file_hash, sha256_value, portable_value
 
 
 class StaleRevisionError(ValueError):
@@ -97,7 +97,7 @@ class RevisionStore:
             path = (directory / name).resolve()
             if not path.is_relative_to(directory.resolve()) or not path.is_file() or file_hash(path) != digest:
                 raise ValueError(f"Committed revision integrity failure: {name}")
-        from pipeline.coverage_ledger import validate_sidecars
+        from domain.evaluation.coverage_ledger import validate_sidecars
         validate_sidecars(directory)
         return record
 
@@ -118,11 +118,11 @@ class RevisionStore:
                     "chunks.json", "storyboard.json", "quality_report.json", "run_manifest.json")
         if any(not (destination / name).is_file() for name in required):
             raise ValueError("Cannot publish an incomplete revision")
-        from pipeline.quality_controller import QualityReport
-        from schemas.ir1_schema import ValidatedIR1
-        from schemas.ir2_content_schema import TargetIR2Presentation
-        from schemas.raw_extraction_schema import RawExtraction
-        from schemas.storyboard_schema import Storyboard
+        from infrastructure.ingestion.quality_controller import QualityReport
+        from contracts.ir1_schema import ValidatedIR1
+        from contracts.ir2_content_schema import TargetIR2Presentation
+        from contracts.raw_extraction_schema import RawExtraction
+        from contracts.storyboard_schema import Storyboard
         for name, model in (("ir1_validated.json", ValidatedIR1), ("ppt_content.json", TargetIR2Presentation),
                             ("raw_extraction.json", RawExtraction), ("storyboard.json", Storyboard)):
             model.model_validate_json((destination / name).read_text(encoding="utf-8"))
@@ -148,7 +148,7 @@ class RevisionStore:
         if manifest.get("assessed_ir1_hash") != sha256_value(portable_value(ir1)):
             raise ValueError("IR1 changed after artifact assessment")
         if ir1.get('schema_version') == '4':
-            from core.asset_registry import AssetRegistry
+            from domain.extraction.asset_registry import AssetRegistry
             registry = AssetRegistry(ir1['assets'], run_root=destination, source_item_ids=ir1['source_item_ids'],
                                      asset_source_items=ir1.get('asset_source_items',[]))
             for asset in registry.assets.values():

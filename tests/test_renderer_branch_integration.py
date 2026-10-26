@@ -8,14 +8,14 @@ from pathlib import Path
 import pytest
 from PIL import Image
 from pptx import Presentation
-from core.artifacts import file_hash
-from core.builder import PresentationBuilder
-from core.revisions import RevisionStore
-from core.quality_metadata import read_metadata
+from infrastructure.utils.artifacts import file_hash
+from application.jobs.builder import PresentationBuilder
+from infrastructure.persistence.revisions import RevisionStore
+from domain.evaluation.quality_metadata import read_metadata
 from renderers.base import PresentationScene, legacy_ir2_to_scene
 from renderers.factory import get_renderer
-from pipeline.orchestrator import run_multi_agent_pipeline
-from pipeline.slide_editor import edit_multi_agent_slide
+from application.pipeline.orchestrator import run_multi_agent_pipeline
+from application.services.slide_editor import edit_multi_agent_slide
 from test_cache_resume_revision_repair import setup_run
 from test_provenance_assets import source_run
 
@@ -80,7 +80,7 @@ def test_dense_native_content_preserves_resolved_font_size(tmp_path, backend, ki
 @pytest.mark.parametrize("height,out_of_bounds", [(80, False), (120, True)])
 def test_native_office_expansion_is_checked_against_scene_and_page(height, out_of_bounds):
     from types import SimpleNamespace
-    from pipeline.slide_renderer import _text_bounds
+    from infrastructure.ingestion.slide_renderer import _text_bounds
     shape = SimpleNamespace(Type=19, Id=3, Name="table", AlternativeText="", Left=0, Top=0,
                             Width=100, Height=height, HasTable=False, HasTextFrame=False)
     slide = SimpleNamespace(Shapes=SimpleNamespace(Count=1, Item=lambda index: shape))
@@ -200,7 +200,7 @@ def test_js_generation_edit_resume_keep_backend_and_scene(setup_run, monkeypatch
 
 def test_table_cell_com_bounds_do_not_call_unimplemented_properties():
     from types import SimpleNamespace
-    from pipeline.slide_renderer import _text_bounds
+    from infrastructure.ingestion.slide_renderer import _text_bounds
     class Cell:
         @property
         def Type(self): raise RuntimeError("Office table cell Shape.Type is E_NOTIMPL")
@@ -220,7 +220,7 @@ def test_table_cell_com_bounds_do_not_call_unimplemented_properties():
 @pytest.mark.parametrize("kind", ["image", "formula", "table"])
 def test_js_registry_assets_are_real_and_provenance_is_required(source_run, kind):
     _, raw, root = source_run
-    from core.asset_registry import AssetRegistry
+    from domain.extraction.asset_registry import AssetRegistry
     asset = next(a for a in raw.assets if a.kind == kind)
     registry = AssetRegistry(raw.assets, run_root=root, source_item_ids=raw.source_item_ids)
     builder = PresentationBuilder(catalog(), backend="pptxgenjs", asset_registry=registry)
@@ -235,8 +235,8 @@ def test_js_registry_assets_are_real_and_provenance_is_required(source_run, kind
 
 def test_office_literal_series_name_is_retained_by_extractor(tmp_path):
     from pptx.oxml.xmlchemy import OxmlElement
-    from core.chart_content import native_series_name
-    from evalute.extract.pptx_extractor import extract
+    from domain.rendering.chart_content import native_series_name
+    from evaluation.extract.pptx_extractor import extract
     path = tmp_path / "literal.pptx"
     PresentationBuilder(catalog()).build(deck({"type":"chart", "categories":["A"],
                                       "series":[{"name":"Original", "values":[1]}]}), path)
@@ -253,7 +253,7 @@ def test_changed_scene_after_assessment_cannot_publish(setup_run):
     source, options, caller = setup_run
     initial = run_multi_agent_pipeline(source, options, caller=caller)
     store = RevisionStore(options.output_dir)
-    from core.revisions import copy_bundle
+    from infrastructure.persistence.revisions import copy_bundle
     work = store.root / ".work" / "tampered_scene"
     copy_bundle(initial.parent, work)
     scene = json.loads((work / "scene_graph.json").read_text())

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from schemas.ir2_content_schema import (
+from contracts.ir2_content_schema import (
     BulletsContent,
     FormulaContent,
     ImageContent,

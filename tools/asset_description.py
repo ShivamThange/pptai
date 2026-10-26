@@ -2,10 +2,10 @@
 import json
 from pathlib import Path
 from pydantic import Field
-from schemas.asset_schema import AssetModel,AssetDescription
-from core.artifacts import CheckpointCache,sha256_value,caller_fingerprint,file_hash
-from core.job_context import check
-from core.llm_client import LLMRequestError
+from contracts.asset_schema import AssetModel,AssetDescription
+from infrastructure.utils.artifacts import CheckpointCache,sha256_value,caller_fingerprint,file_hash
+from application.jobs.job_context import check
+from infrastructure.llm.llm_client import LLMRequestError
 
 
 class DescriptionDraft(AssetModel):

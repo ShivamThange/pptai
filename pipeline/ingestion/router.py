@@ -2,9 +2,9 @@
 import importlib.metadata as metadata
 import os
 from pathlib import Path
-from core.artifacts import file_hash
-from pipeline.ingestion.detection import detect, decode_text
-from schemas.ingestion_schema import ParseOptions, ResolvedParseOptions, IngestionError, ParseFinding
+from infrastructure.utils.artifacts import file_hash
+from infrastructure.ingestion.detection import detect, decode_text
+from contracts.ingestion_schema import ParseOptions, ResolvedParseOptions, IngestionError, ParseFinding
 
 
 def package_versions(names):
@@ -51,7 +51,7 @@ def resolve_options(source, *, selected_type='auto', parse_options=None, use_gpu
     resolved = ResolvedParseOptions(resolved_type=kind, requested=requested, adapter=adapter,
         encoding=detection['text_encoding'], versions=package_versions(['openpyxl'] if kind == 'xlsx' else []))
     if kind == 'csv':
-        from pipeline.ingestion.adapters.csv import delimiter_for
+        from infrastructure.ingestion.adapters.csv import delimiter_for
         text, _ = decode_text(Path(source).read_bytes(), resolved.encoding)
         resolved.csv_delimiter = delimiter_for(text) if requested.csv_delimiter == 'auto' else requested.csv_delimiter
         resolved.csv_has_header = requested.csv_has_header

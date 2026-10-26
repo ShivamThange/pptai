@@ -8,21 +8,21 @@ import sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT));sys.path.insert(0,str(ROOT/'tests'));sys.path.insert(0,str(ROOT/'scripts'))
-from core.artifacts import atomic_json,file_hash
-from core.asset_registry import AssetRegistry
-from core.builder import PresentationBuilder
-from pipeline.ingestion.collection import assemble,retain_sources
-from pipeline.ingestion.asset_adapters import enrich_assets
-from pipeline.source_adapter import build_raw_extraction
-from core.artifacts import parse_document_cached
-from schemas.asset_schema import AssetOptions
-from pipeline.asset_interpreter import asset_insights_to_units
-from pipeline.knowledge_extractor import generate_validated_ir1
+from infrastructure.utils.artifacts import atomic_json,file_hash
+from domain.extraction.asset_registry import AssetRegistry
+from application.jobs.builder import PresentationBuilder
+from infrastructure.ingestion.collection import assemble,retain_sources
+from infrastructure.ingestion.asset_adapters import enrich_assets
+from infrastructure.ingestion.source_adapter import build_raw_extraction
+from infrastructure.utils.artifacts import parse_document_cached
+from contracts.asset_schema import AssetOptions
+from infrastructure.ingestion.asset_interpreter import asset_insights_to_units
+from infrastructure.ingestion.knowledge_extractor import generate_validated_ir1
 from f04_helpers import FIXTURES,AssetCaller
 from verify_r06_native import catalog,slides,render_checked,native_edit_roundtrip
 from test_cache_resume_revision_repair import FixtureCaller
-from schemas.storyboard_schema import SlidePlan,Storyboard
-from schemas.ir2_content_schema import SlideSpec
+from contracts.storyboard_schema import SlidePlan,Storyboard
+from contracts.ir2_content_schema import SlideSpec
 from pptx import Presentation
 
 
@@ -74,9 +74,9 @@ def main():
     word_chart=next(a for a in raw.assets if a.kind=='chart' and a.content.data_state=='VERIFIED_SOURCE_DATA' and any(
         item.embedded_package_part for item in raw.asset_source_items if item.source_id in a.source_refs))
     contents.append({'type':'chart',**registry.resolve_chart(word_chart.asset_id)})
-    from schemas.ir1_schema import ValidatedIR1
-    from schemas.storyboard_schema import TopicChunk
-    from pipeline.slide_composer import retrieve_slide_context,validate_slide_grounding
+    from contracts.ir1_schema import ValidatedIR1
+    from contracts.storyboard_schema import TopicChunk
+    from infrastructure.ingestion.slide_composer import retrieve_slide_context,validate_slide_grounding
     units=asset_insights_to_units(raw)
     ir1=ValidatedIR1(schema_version='4',document_title=raw.document_name,units=units,assets=[a.model_dump(mode='json') for a in raw.assets],
         source_item_ids=raw.source_item_ids,source_blocks=raw.blocks,asset_source_items=raw.asset_source_items)
@@ -106,7 +106,7 @@ def main():
     from config.settings import get_multi_agent_settings
     from fastapi.testclient import TestClient
     from workers.local import LocalWorker
-    from core.revisions import RevisionStore
+    from infrastructure.persistence.revisions import RevisionStore
     settings=ServiceSettings(root=root/'service',layouts_path=ROOT/'config/ppt_default_layouts.json')
     callers=[]
     def factory(context):
@@ -147,7 +147,7 @@ def main():
                     'resume_calls':len(callers[-1].calls),'asset_download':'passed','edit':'passed'})
     if args.live:
         from config.settings import resolve_environment
-        from core.llm_client import LLMClient,LLMRequestError
+        from infrastructure.llm.llm_client import LLMClient,LLMRequestError
         env=resolve_environment(ROOT.parent/'BTPs5/.env');settings=get_multi_agent_settings(env)
         live=LLMClient(settings=settings,api_key=env.get('OPENROUTER_API_KEY' if settings.provider=='openrouter' else 'GEMINI_API_KEY'))
         try:

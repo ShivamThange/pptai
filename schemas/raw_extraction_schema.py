@@ -3,8 +3,8 @@
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from schemas.ingestion_schema import DocumentDescriptor
-from schemas.asset_schema import AssetContent, AssetSourceItem, AssetSemanticCoverage
+from contracts.ingestion_schema import DocumentDescriptor
+from contracts.asset_schema import AssetContent, AssetSourceItem, AssetSemanticCoverage
 
 
 class SourceLocation(BaseModel):

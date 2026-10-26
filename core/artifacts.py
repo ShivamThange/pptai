@@ -143,18 +143,18 @@ def parse_document_cached(source: str | Path, output_dir: str | Path, *, use_gpu
                           resume=False, parser=None, selected_type=None, parse_options=None,
                           upload_spec=None, context=None, limits=None) -> Path:
     """Complete-only staged publication, independent of presentation preferences."""
-    from pipeline.ingestion.router import resolve_options, extract
-    from pipeline.ingestion.validation import validate_ingestion
-    from schemas.ingestion_schema import DocumentDescriptor, ParseFinding, ParseResult, IngestionError
-    from core.job_context import check
-    from core.revisions import _rebase
+    from infrastructure.ingestion.router import resolve_options, extract
+    from infrastructure.ingestion.validation import validate_ingestion
+    from contracts.ingestion_schema import DocumentDescriptor, ParseFinding, ParseResult, IngestionError
+    from application.jobs.job_context import check
+    from infrastructure.persistence.revisions import _rebase
     source, root = Path(source).resolve(), Path(output_dir).resolve()
     try:
         effective, initial_findings = resolve_options(source, selected_type=selected_type,
             parse_options=parse_options, use_gpu=use_gpu, upload_spec=upload_spec)
     except IngestionError as error:
-        from pipeline.ingestion.detection import EXTENSIONS
-        from schemas.ingestion_schema import ResolvedParseOptions, ParseOptions
+        from infrastructure.ingestion.detection import EXTENSIONS
+        from contracts.ingestion_schema import ResolvedParseOptions, ParseOptions
         kind = EXTENSIONS.get(source.suffix.lower())
         if kind:
             import uuid

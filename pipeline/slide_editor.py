@@ -11,22 +11,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from core.artifacts import read_validated_json, write_validated_json, update_manifest, atomic_json, file_hash, sha256_value, artifact_lock, portable_value, caller_fingerprint, CheckpointCache
-from core.revisions import RevisionStore, copy_bundle, _rebase
-from core.builder import PresentationBuilder
-from core.asset_registry import AssetRegistry
-from core.llm_client import LLMClient, LLMRequestError
-from core.job_context import check, report as progress_report
-from core.llm_run import observe_llm_run
-from pipeline.quality_controller import assess_final_artifact, write_quality_report, artifact_hash
-from pipeline.slide_composer import compose_single_slide, retrieve_slide_context, write_ir2
-from schemas.ir1_schema import ValidatedIR1
-from schemas.ir2_content_schema import TargetIR2Presentation
-from schemas.storyboard_schema import Storyboard, TopicChunk
-from schemas.raw_extraction_schema import RawExtraction
-from tools.claim_verification import migrate_ir1_v2
-from pipeline.knowledge_extractor import coverage_ledger, validate_knowledge_units, build_legacy_projection
-from pipeline.slide_composer import validate_slide_grounding
+from infrastructure.utils.artifacts import read_validated_json, write_validated_json, update_manifest, atomic_json, file_hash, sha256_value, artifact_lock, portable_value, caller_fingerprint, CheckpointCache
+from infrastructure.persistence.revisions import RevisionStore, copy_bundle, _rebase
+from application.jobs.builder import PresentationBuilder
+from domain.extraction.asset_registry import AssetRegistry
+from infrastructure.llm.llm_client import LLMClient, LLMRequestError
+from application.jobs.job_context import check, report as progress_report
+from infrastructure.llm.llm_run import observe_llm_run
+from infrastructure.ingestion.quality_controller import assess_final_artifact, write_quality_report, artifact_hash
+from infrastructure.ingestion.slide_composer import compose_single_slide, retrieve_slide_context, write_ir2
+from contracts.ir1_schema import ValidatedIR1
+from contracts.ir2_content_schema import TargetIR2Presentation
+from contracts.storyboard_schema import Storyboard, TopicChunk
+from contracts.raw_extraction_schema import RawExtraction
+from domain.evaluation.claim_verification import migrate_ir1_v2
+from infrastructure.ingestion.knowledge_extractor import coverage_ledger, validate_knowledge_units, build_legacy_projection
+from infrastructure.ingestion.slide_composer import validate_slide_grounding
 
 
 def import_legacy_revision(*, output_dir, layouts_path, caller=None, renderer="python") -> Path:
@@ -49,7 +49,7 @@ def import_legacy_revision(*, output_dir, layouts_path, caller=None, renderer="p
         shutil.copytree(store.root / "assets", work / "assets")
     ir1 = read_validated_json(work / "ir1_validated.json", ValidatedIR1)
     raw = read_validated_json(work / "raw_extraction.json", RawExtraction)
-    from pipeline.coverage_ledger import initialize_ledger
+    from domain.evaluation.coverage_ledger import initialize_ledger
     legacy_context = initialize_ledger(raw)
     legacy_context.legacy_context_unknown = True
     atomic_json(work / 'context_coverage.json', legacy_context.model_dump(mode='json'))
@@ -65,7 +65,7 @@ def import_legacy_revision(*, output_dir, layouts_path, caller=None, renderer="p
         raise ValueError("Legacy storyboard/IR2 counts do not match")
     chunks = _load_chunks(work / "chunks.json")
     layouts = json.loads(Path(layouts_path).read_text(encoding="utf-8"))
-    from pipeline.slide_composer import validate_slide_spec
+    from infrastructure.ingestion.slide_composer import validate_slide_spec
     for plan, slide in zip(storyboard.slides, ir2.slides):
         context = retrieve_slide_context(plan, ir1, chunks, storyboard)
         validate_slide_spec(slide, layouts, allowed_unit_ids=set(plan.source_unit_ids), assets=context["assets"],
@@ -125,7 +125,7 @@ def _edit_revision_job(*, output_dir, layouts_path, slide_index, instruction, ba
     work = store.root / ".work" / "edits" / job_id
     copy_bundle(active, work)
     if not (work / 'context_coverage.json').exists():
-        from pipeline.coverage_ledger import initialize_ledger
+        from domain.evaluation.coverage_ledger import initialize_ledger
         legacy = initialize_ledger(read_validated_json(work / 'raw_extraction.json', RawExtraction))
         legacy.legacy_context_unknown = True
         atomic_json(work / 'context_coverage.json', legacy.model_dump(mode='json'))
@@ -145,8 +145,8 @@ def _edit_revision_job(*, output_dir, layouts_path, slide_index, instruction, ba
         job.update(status="COMPLETED", revision_id=committed.name)
         # Derived slide caches follow accepted edits, never rejected/stale candidates.
         try:
-            from pipeline.orchestrator import runtime_dependencies
-            from pipeline.slide_composer import slide_cache_key
+            from application.pipeline.orchestrator import runtime_dependencies
+            from infrastructure.ingestion.slide_composer import slide_cache_key
             with artifact_lock(store.root / ".locks" / "publication.lock"):
                 manifest = json.loads((committed / "run_manifest.json").read_text(encoding="utf-8"))
                 if store.active_id() == committed.name and manifest.get("generation_model_fingerprint") == caller_fingerprint(client) and manifest.get("generation_dependencies") == runtime_dependencies():
@@ -249,7 +249,7 @@ def _edit_multi_agent_slide(
         backend = manifest.get("renderer", {}).get("backend", "python")
         # Edits inherit the deck's recorded theme and layout mode so a revised
         # slide renders coherently with the rest of the presentation.
-        from core.theme_engine import load_theme
+        from domain.rendering.theme_engine import load_theme
         theme_name = manifest.get("options", {}).get("theme")
         edit_theme = load_theme(theme_name) if theme_name else None
         dynamic_layout = bool(manifest.get("options", {}).get("dynamic_layout", False))
@@ -266,7 +266,7 @@ def _edit_multi_agent_slide(
         # Scoped visual repair for the edited slide: the generation path has
         # always had this loop; without it, an overflow edit is rejected
         # wholesale on Windows or committed unchecked elsewhere.
-        from pipeline.orchestrator import collect_visual_repair_feedback
+        from application.pipeline.orchestrator import collect_visual_repair_feedback
         feedback = collect_visual_repair_feedback(report, builder).get(slide_index, [])
         if feedback and max_repairs > 0:
             progress_report(job_context, "composition", 0, 1)

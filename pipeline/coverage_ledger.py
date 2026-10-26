@@ -1,8 +1,8 @@
 """Context accounting, independent of the R03 factual coverage gate."""
 from collections import defaultdict
-from core.artifacts import sha256_value, portable_value, file_hash
-from schemas.context_schema import CoverageLedger, CoverageEvent, CoverageFinding
-from pipeline.context_fragments import initial_fragments, reference
+from infrastructure.utils.artifacts import sha256_value, portable_value, file_hash
+from contracts.context_schema import CoverageLedger, CoverageEvent, CoverageFinding
+from infrastructure.ingestion.context_fragments import initial_fragments, reference
 
 
 def initialize_ledger(raw, source_manifest=None):
@@ -10,7 +10,7 @@ def initialize_ledger(raw, source_manifest=None):
     represented = {r.source_id for r in refs}
     for identity in raw.source_item_ids:
         if identity not in represented:
-            from schemas.context_schema import ContextRef
+            from contracts.context_schema import ContextRef
             refs.append(ContextRef(ref_id='ci_' + sha256_value(identity)[:24], document_id=raw.document_id or 'legacy-document',
                 source_id=identity, section_path=[], representation='inventory', source_hash=sha256_value(identity),
                 projection_hash=sha256_value(identity)))
@@ -174,7 +174,7 @@ def validate_supplied_evidence(units, fragment, raw=None, *, force=False):
                 raise ContextBudgetError('UNSUPPLIED_EVIDENCE', stage='knowledge_extraction')
 
 
-from core.context_budget import ContextBudgetError
+from infrastructure.llm.context_budget import ContextBudgetError
 
 
 def request_references(raw, contents, stage):
@@ -222,7 +222,7 @@ def request_references(raw, contents, stage):
                     ref = reference(asset, 'caption', value['caption'])
                     refs[ref.ref_id] = ref
             if stage == 'storyboard_planning' and value.get('unit_id'):
-                from schemas.context_schema import ContextRef
+                from contracts.context_schema import ContextRef
                 section = value.get('section') or []
                 document = next((b.document_id for b in raw.blocks if b.document_id and any(b.document_id in p for p in section)), None)
                 ref = ContextRef(ref_id='cd_' + sha256_value(value)[:24], document_id=document or raw.document_id or 'legacy-document',
@@ -240,8 +240,8 @@ def request_references(raw, contents, stage):
 
 def validate_sidecars(directory):
     import json
-    from schemas.context_schema import ContextChunk, ContextChunksArtifact
-    from schemas.raw_extraction_schema import RawExtraction
+    from contracts.context_schema import ContextChunk, ContextChunksArtifact
+    from contracts.raw_extraction_schema import RawExtraction
     path = directory / 'context_coverage.json'
     if not path.exists():
         return  # Existing revisions have explicit unknown historical context.
@@ -259,7 +259,7 @@ def validate_sidecars(directory):
     if findings or ledger.totals != expected:
         raise ContextBudgetError('CONTEXT_COVERAGE_GAP', stage='publication')
     for prepared_path in (directory / 'prepared_contexts').glob('*.json'):
-        from schemas.context_schema import PreparedContext
+        from contracts.context_schema import PreparedContext
         prepared = PreparedContext.model_validate_json(prepared_path.read_text(encoding='utf-8'))
         if prepared.measurement.input_tokens > prepared.budget.input_ceiling:
             raise ContextBudgetError('REQUIRED_CONTEXT_TOO_LARGE', stage='publication')

@@ -3,7 +3,7 @@ import codecs
 from pathlib import Path
 from zipfile import ZipFile, BadZipFile
 from xml.etree import ElementTree as ET
-from schemas.ingestion_schema import IngestionError, ParseFinding
+from contracts.ingestion_schema import IngestionError, ParseFinding
 
 EXTENSIONS = {'.pdf': 'pdf', '.docx': 'docx', '.txt': 'txt', '.md': 'markdown',
               '.markdown': 'markdown', '.csv': 'csv', '.xlsx': 'xlsx', '.png': 'png',

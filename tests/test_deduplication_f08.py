@@ -2,14 +2,14 @@
 import pytest
 from unittest.mock import patch
 
-from pipeline.deduplicator import (
+from infrastructure.ingestion.deduplicator import (
     DuplicatePair,
     DedupResult,
     check_fact_compatibility,
     deduplicate_knowledge_units,
     deduplicate_units,
 )
-from schemas.ir1_schema import KnowledgeUnit, EvidenceRef, MetricFact
+from contracts.ir1_schema import KnowledgeUnit, EvidenceRef, MetricFact
 
 
 def make_unit(

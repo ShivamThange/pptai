@@ -1,8 +1,8 @@
 """Faithful grids and selections; decimal normalization never replaces display."""
 import re
 from decimal import Decimal
-from schemas.asset_schema import TableAssetContent, TableSelection
-from core.artifacts import sha256_value
+from contracts.asset_schema import TableAssetContent, TableSelection
+from infrastructure.utils.artifacts import sha256_value
 
 
 def rich_cell(cell, *, numeric_column=False):

@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from pipeline.ingestion.detection import decode_text
+from infrastructure.ingestion.detection import decode_text
 from .common import base, block, finish
 
 

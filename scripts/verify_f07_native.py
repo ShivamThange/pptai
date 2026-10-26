@@ -13,12 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT/'tests')); sys.path.insert(0, str(ROOT/'scripts'))
 from config.settings import get_multi_agent_settings
 from config.service_settings import ServiceSettings
-from pipeline.service import generate_deck_from_sources, edit_slide
-from pipeline.orchestrator import MultiAgentOptions
-from core.artifacts import atomic_json, file_hash
-from core.revisions import RevisionStore
-from core.context_budget import ContextBudgetError
-from core.llm_client import LLMBudgetError
+from application.services.deck_service import generate_deck_from_sources, edit_slide
+from application.pipeline.orchestrator import MultiAgentOptions
+from infrastructure.utils.artifacts import atomic_json, file_hash
+from infrastructure.persistence.revisions import RevisionStore
+from infrastructure.llm.context_budget import ContextBudgetError
+from infrastructure.llm.llm_client import LLMBudgetError
 from test_context_coverage_f07 import SourceClient
 from test_context_budget_f07 import Response
 from verify_f02_native import SourceFixtureCaller

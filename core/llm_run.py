@@ -8,8 +8,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterator
 
-from core.artifacts import sha256_value, update_manifest, atomic_json
-from core.llm_client import CallAttempt, LLMUsageLedger
+from infrastructure.utils.artifacts import sha256_value, update_manifest, atomic_json
+from infrastructure.llm.llm_client import CallAttempt, LLMUsageLedger
 
 
 def upgrade_manifest_observability(path: Path) -> None:
@@ -50,9 +50,9 @@ def observe_llm_run(client: Any, path: str | Path, *, operation: str = "generati
         coverage_path = target.parent / 'context_coverage.json'
         prepared = getattr(client, 'prepared_contexts', {}).get(record.preparation_hash)
         if coverage_path.exists() and prepared is not None and record.stage != 'knowledge_extraction':
-            from schemas.context_schema import CoverageLedger, ContextCallRecord, ContextChunk
-            from pipeline.coverage_ledger import record_preparation, record_call_outcome, validate_context_coverage
-            from schemas.raw_extraction_schema import RawExtraction
+            from contracts.context_schema import CoverageLedger, ContextCallRecord, ContextChunk
+            from domain.evaluation.coverage_ledger import record_preparation, record_call_outcome, validate_context_coverage
+            from contracts.raw_extraction_schema import RawExtraction
             # Usage callbacks are serialized by LLMUsageLedger's existing lock.
             ledger = CoverageLedger.model_validate_json(coverage_path.read_text(encoding='utf-8'))
             if not any(row.call_id == record.call_id for row in ledger.calls):

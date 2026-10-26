@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from pptx import Presentation
 
-from core.builder import PresentationBuilder
-from core.layout_engine import DynamicLayoutEngine
+from application.jobs.builder import PresentationBuilder
+from domain.rendering.layout_engine import DynamicLayoutEngine
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 

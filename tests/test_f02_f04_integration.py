@@ -9,9 +9,9 @@ Verifies:
 import json
 import hashlib
 from pathlib import Path
-from pipeline.source_adapter import adapt_structural_ir
-from pipeline.stage2_quality_gate import verify_structural_ir
-from schemas.raw_extraction_schema import RawExtraction, SourceAsset
+from infrastructure.ingestion.source_adapter import adapt_structural_ir
+from infrastructure.ingestion.stage2_quality_gate import verify_structural_ir
+from contracts.raw_extraction_schema import RawExtraction, SourceAsset
 
 
 def test_chart_assets_preserved_in_adapt_structural_ir(tmp_path):

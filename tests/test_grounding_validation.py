@@ -6,15 +6,15 @@ from pathlib import Path
 import pytest
 from pptx import Presentation
 
-from pipeline.knowledge_extractor import (
+from infrastructure.ingestion.knowledge_extractor import (
     KnowledgeUnitBatch, KnowledgeUnitDraft, generate_validated_ir1, validate_knowledge_units, coverage_ledger,
 )
-from pipeline.slide_composer import validate_slide_grounding, compose_single_slide, judge_slide_claims
-from schemas.ir1_schema import EvidenceRef, KnowledgeUnit, MetricFact, MetricComparison, CalculationTrace
-from schemas.ir2_content_schema import SlideSpec
-from schemas.raw_extraction_schema import RawExtraction, SourceBlock, SourceAsset
-from schemas.storyboard_schema import SlidePlan
-from tools.claim_verification import validate_claim, judge_semantics, SemanticBatch, migrate_ir1_v2, mentions
+from infrastructure.ingestion.slide_composer import validate_slide_grounding, compose_single_slide, judge_slide_claims
+from contracts.ir1_schema import EvidenceRef, KnowledgeUnit, MetricFact, MetricComparison, CalculationTrace
+from contracts.ir2_content_schema import SlideSpec
+from contracts.raw_extraction_schema import RawExtraction, SourceBlock, SourceAsset
+from contracts.storyboard_schema import SlidePlan
+from domain.evaluation.claim_verification import validate_claim, judge_semantics, SemanticBatch, migrate_ir1_v2, mentions
 
 
 def test_verbatim_citation_numbers_are_grounded_and_covered():
@@ -106,7 +106,7 @@ def test_numeric_binding_does_not_invent_additional_subjects_or_measures(summary
 
 
 def test_model_response_schema_excludes_locally_assigned_grounding():
-    from schemas.ir2_content_schema import SlideDraft
+    from contracts.ir2_content_schema import SlideDraft
     assert "grounding" not in SlideDraft.model_json_schema()["properties"]
     assert "grounding" in SlideSpec.model_json_schema()["properties"]
 
@@ -455,7 +455,7 @@ def test_completed_visible_judgment_survives_only_identical_claim_and_support():
 
 
 def test_terminal_semantic_provider_failure_stops_later_batches():
-    from core.llm_client import LLMRequestError
+    from infrastructure.llm.llm_client import LLMRequestError
     units = [claim("Profit = 2") for _ in range(3)]
     for index, unit in enumerate(units):
         unit.unit_id = str(index)
@@ -494,7 +494,7 @@ def test_negative_decimal_exponent_and_currency_values_are_retained():
 
 
 def test_real_builder_preserves_checked_metrics_in_pptx(tmp_path):
-    from core.builder import PresentationBuilder
+    from application.jobs.builder import PresentationBuilder
     source = raw_text()
     unit = claim("Revenue = 10; Profit = 2")
     assert validate_claim(source, unit).status == "BASIC_CHECKED"

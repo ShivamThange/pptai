@@ -1,8 +1,8 @@
 """Test suite for F06 Optional deep source verification."""
 import json
-from schemas.ir1_schema import KnowledgeUnit, EvidenceRef, ValidationResult
-from schemas.raw_extraction_schema import RawExtraction, SourceBlock
-from tools.claim_verification import (
+from contracts.ir1_schema import KnowledgeUnit, EvidenceRef, ValidationResult
+from contracts.raw_extraction_schema import RawExtraction, SourceBlock
+from domain.evaluation.claim_verification import (
     ClaimVerificationCache,
     build_verification_report,
     judge_semantics,

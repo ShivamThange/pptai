@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from core.artifacts import file_hash
+from infrastructure.utils.artifacts import file_hash
 from renderers.base import PresentationScene, RenderArtifact, validate_scene_assets
 from renderers.artifact import seal_native_metadata, verify_native_coverage
 

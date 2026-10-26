@@ -3,11 +3,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from config.settings import resolve_environment, get_multi_agent_settings, get_provider_model
-from core.llm_client import LLMClient
-from pipeline.orchestrator import MultiAgentOptions
-from pipeline.slide_editor import import_legacy_revision
-from pipeline.service import generate_deck, generate_deck_from_sources, edit_slide
-from schemas.ingestion_schema import ParseOptions, IngestionError
+from infrastructure.llm.llm_client import LLMClient
+from application.pipeline.orchestrator import MultiAgentOptions
+from application.services.slide_editor import import_legacy_revision
+from application.services.deck_service import generate_deck, generate_deck_from_sources, edit_slide
+from contracts.ingestion_schema import ParseOptions, IngestionError
 import json
 from renderers.factory import validate_renderer_runtime
 
@@ -158,9 +158,9 @@ def main():
         operation, source_argument = generate_deck, args.input[0]
         ingestion_args = {'selected_type': input_types[0], 'parse_options': parse_options[0]} if args.input_type or args.parse_options_file else {}
     else:
-        from core.artifacts import file_hash
+        from infrastructure.utils.artifacts import file_hash
         unique = {}
-        from pipeline.ingestion.detection import detect
+        from infrastructure.ingestion.detection import detect
         for source, kind, opts in zip(args.input, input_types, parse_options):
             try:
                 detection = detect(source, selected_type=kind, encoding=opts['encoding'])
@@ -213,9 +213,9 @@ def main():
 
     if args.evaluate:
         try:
-            from evalute.config import load
-            from evalute.reference.build_reference import build
-            from evalute.runner import evaluate_presentation
+            from evaluation.config import load
+            from evaluation.reference.build_reference import build
+            from evaluation.runner import evaluate_presentation
 
             run_id = args.eval_run_id or f"{Path(args.input[0]).stem}_{datetime.now():%Y%m%d_%H%M%S}"
             eval_root = Path(args.eval_out or Path(args.output_dir) / "evaluation")
@@ -232,7 +232,7 @@ def main():
                                            eval_root / run_id, eval_config, not args.eval_no_ai_judging,
                                            judge_caller=LLMClient.for_evaluation(settings=settings, provider=judge_provider, model=judge_model,
                                                api_key=environment.get("OPENROUTER_API_KEY" if judge_provider == "openrouter" else "GEMINI_API_KEY", "")))
-            from core.artifacts import update_manifest
+            from infrastructure.utils.artifacts import update_manifest
             update_manifest(Path(args.output_dir) / "run_manifest.json", evaluation={
                 "report": str(eval_root / run_id / "report.json"),
                 "faithfulness": report["metrics"]["faithfulness"],

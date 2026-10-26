@@ -118,7 +118,7 @@ def load_theme(name: str, lens: str | None = None) -> ThemeSpec:
 
 def theme_signature(name: str, lens: str | None = None) -> str:
     """Content hash of the resolved theme file for resume/cache identity."""
-    from core.artifacts import file_hash
+    from infrastructure.utils.artifacts import file_hash
     theme = load_theme(name, lens)
     source = THEMES_DIR / f"{theme.id}.json"
     return file_hash(source) if source.is_file() else theme.id

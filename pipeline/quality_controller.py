@@ -4,12 +4,12 @@ import hashlib
 from pathlib import Path
 from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
-from evalute.config import load
-from evalute.extract.pptx_extractor import extract
-from evalute.metrics.functional import evaluate as evaluate_functional
-from evalute.metrics.visual import evaluate as evaluate_visual
-from pipeline.slide_renderer import render_pptx_slides
-from pipeline.visual_reviewer import audit_slide_images
+from evaluation.config import load
+from evaluation.extract.pptx_extractor import extract
+from evaluation.metrics.functional import evaluate as evaluate_functional
+from evaluation.metrics.visual import evaluate as evaluate_visual
+from infrastructure.ingestion.slide_renderer import render_pptx_slides
+from infrastructure.ingestion.visual_reviewer import audit_slide_images
 
 CheckStatus = Literal['FAILED_TO_RUN', 'NOT_EVALUATED', 'EVALUATED_FAIL', 'EVALUATED_PASS']
 
@@ -112,8 +112,8 @@ def factual_check(ir1, ir2, digest, *, deep_verification=False):
                'deep_verification': deep_verification}
     if failed:
         return QualityCheck(status='EVALUATED_FAIL', artifact_hash=digest, details=details, reason='Critical visible factual failure/contradiction')
-    from pipeline.slide_composer import visible_claims
-    from core.artifacts import sha256_value
+    from infrastructure.ingestion.slide_composer import visible_claims
+    from infrastructure.utils.artifacts import sha256_value
     claims_match = all(set(slide.grounding) == set(visible_claims(slide)) and
                        all(slide.grounding[key].claim_sha256 == sha256_value(claim)
                            for key, claim in visible_claims(slide).items()) for slide in ir2.slides)

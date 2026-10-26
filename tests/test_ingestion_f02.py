@@ -7,23 +7,23 @@ from dataclasses import replace
 from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
-from core.artifacts import atomic_json, file_hash, parse_document_cached
-from core.job_context import JobContext
-from core.jobs import JobStore, SCHEMA
-from core.llm_client import LLMCancelledError
+from infrastructure.utils.artifacts import atomic_json, file_hash, parse_document_cached
+from application.jobs.job_context import JobContext
+from infrastructure.persistence.jobs import JobStore, SCHEMA
+from infrastructure.llm.llm_client import LLMCancelledError
 from config.service_settings import ServiceSettings, get_service_settings
 from api.app import create_app
-from pipeline.ingestion.detection import detect, decode_text
-from pipeline.ingestion.collection import assemble
-from pipeline.ingestion.validation import validate_ingestion
-from pipeline.ingestion.router import resolve_options
-from pipeline.knowledge_extractor import source_passage_units, _section_batches, _assets_for_section
-from pipeline.source_adapter import build_raw_extraction
-from pipeline.service import parse_sources
-from schemas.ingestion_schema import ParseOptions, ParseResult, IngestionError
-from schemas.raw_extraction_schema import RawExtraction
-from schemas.ir1_schema import EvidenceRef
-from tools.claim_verification import evidence_text
+from infrastructure.ingestion.detection import detect, decode_text
+from infrastructure.ingestion.collection import assemble
+from infrastructure.ingestion.validation import validate_ingestion
+from infrastructure.ingestion.router import resolve_options
+from infrastructure.ingestion.knowledge_extractor import source_passage_units, _section_batches, _assets_for_section
+from infrastructure.ingestion.source_adapter import build_raw_extraction
+from application.services.deck_service import parse_sources
+from contracts.ingestion_schema import ParseOptions, ParseResult, IngestionError
+from contracts.raw_extraction_schema import RawExtraction
+from contracts.ir1_schema import EvidenceRef
+from domain.evaluation.claim_verification import evidence_text
 from workers.local import LocalWorker
 
 FIXTURES = Path(__file__).parent / 'fixtures/ingestion'
@@ -218,8 +218,8 @@ def test_collection_keeps_member_ids_order_and_isolates_shared_sections(tmp_path
     assert load(other)['collection_id'] != load(aggregate)['collection_id']
     copied = build_raw_extraction(aggregate,tmp_path/'raw')
     assert copied.documents == raw.documents
-    from pipeline.chunker import build_chunks
-    from pipeline.knowledge_extractor import generate_validated_ir1
+    from infrastructure.ingestion.chunker import build_chunks
+    from infrastructure.ingestion.knowledge_extractor import generate_validated_ir1
     ir1 = generate_validated_ir1(raw, None, tmp_path / 'ir1', extraction_mode='source-passages')
     chunks = build_chunks(ir1)
     units = {u.unit_id: u for u in ir1.units}
@@ -362,7 +362,7 @@ def test_real_unreadable_pdf_failure_retains_original(tmp_path,name,code):
 
 def test_cli_multiple_inputs_pairs_types_and_evaluates_aggregate(tmp_path,monkeypatch):
     import main
-    import evalute.reference.build_reference as reference
+    import evaluation.reference.build_reference as reference
     calls=[]
     aggregate=tmp_path/'aggregate.json'
     def generation(sources,root,options,**kwargs):
@@ -442,7 +442,7 @@ def test_progress_retains_file_outcomes_across_generation_stages():
 def test_multi_source_cli_evaluation_uses_collection_path(tmp_path,monkeypatch):
     import main
     from evalute import config, runner
-    from evalute.reference import build_reference
+    from evaluation.reference import build_reference
     aggregate=tmp_path/'collection.json'; revision=tmp_path/'revision'
     seen=[]
     def generate(sources,root,options,**kwargs):

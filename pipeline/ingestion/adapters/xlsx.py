@@ -5,8 +5,8 @@ from pathlib import Path
 from zipfile import ZipFile
 from xml.etree import ElementTree as ET
 import posixpath
-from schemas.ingestion_schema import ParseFinding
-from core.job_context import check
+from contracts.ingestion_schema import ParseFinding
+from application.jobs.job_context import check
 from .common import base, block, table, finish
 
 NS = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}

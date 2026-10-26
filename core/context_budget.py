@@ -2,8 +2,8 @@
 import math
 from dataclasses import dataclass
 from typing import Any
-from core.artifacts import sha256_value
-from schemas.context_schema import StageBudget, TokenMeasurement, PreparedContext
+from infrastructure.utils.artifacts import sha256_value
+from contracts.context_schema import StageBudget, TokenMeasurement, PreparedContext
 
 
 class ContextBudgetError(RuntimeError):

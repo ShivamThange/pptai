@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from pipeline.source_adapter import adapt_structural_ir, _CAPTION_BINDINGS
-from pipeline.stage1_docling_parser import export_docling_document
-from schemas.ingestion_schema import ParseFinding
+from infrastructure.ingestion.source_adapter import adapt_structural_ir, _CAPTION_BINDINGS
+from infrastructure.ingestion.stage1_docling_parser import export_docling_document
+from contracts.ingestion_schema import ParseFinding
 
 
 def _ir(tmp_path, *, blocks=None, assets=None):

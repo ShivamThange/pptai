@@ -14,12 +14,12 @@ from pptx import Presentation
 from api.app import create_app
 from config.service_settings import ServiceSettings
 from config.settings import get_multi_agent_settings
-from core.artifacts import atomic_json, file_hash
-from core.revisions import RevisionStore
+from infrastructure.utils.artifacts import atomic_json, file_hash
+from infrastructure.persistence.revisions import RevisionStore
 from workers.local import LocalWorker
 from test_cache_resume_revision_repair import FixtureCaller
-from schemas.ir2_content_schema import SlideSpec
-from schemas.storyboard_schema import SlidePlan, Storyboard
+from contracts.ir2_content_schema import SlideSpec
+from contracts.storyboard_schema import SlidePlan, Storyboard
 
 
 class SourceFixtureCaller(FixtureCaller):

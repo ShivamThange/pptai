@@ -43,14 +43,14 @@ class PresentationBuilder:
         # untouched, and both renderer backends consume the result.
         theme_flat = {}
         if self.theme is not None:
-            from core.theme_engine import apply_theme_to_ir2
+            from domain.rendering.theme_engine import apply_theme_to_ir2
             content = apply_theme_to_ir2(content, self.theme)
             theme_flat = self.theme.flat()
         # Dynamic layout (F13): measured per-slide geometry with catalog fallback.
         dynamic_regions = None
         if self.dynamic_layout:
             try:
-                from core.layout_engine import DynamicLayoutEngine
+                from domain.rendering.layout_engine import DynamicLayoutEngine
                 engine = DynamicLayoutEngine(self.layouts_spec, self.asset_search_dirs)
                 dynamic_regions, self.layout_report = engine.solve_deck(content)
             except Exception as error:  # Solver defects fall back to the catalog.

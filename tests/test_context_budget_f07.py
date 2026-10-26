@@ -7,9 +7,9 @@ from types import SimpleNamespace
 import pytest
 from pydantic import BaseModel, ValidationError
 from config.settings import ProviderCapabilities, TaskBudget, get_multi_agent_settings, resolve_environment
-from core.context_budget import ContextBudgetError, resolve_stage_budget, assert_fits, measure_request
-from core.llm_client import LLMClient, RpmLimiter
-from schemas.context_schema import TokenMeasurement
+from infrastructure.llm.context_budget import ContextBudgetError, resolve_stage_budget, assert_fits, measure_request
+from infrastructure.llm.llm_client import LLMClient, RpmLimiter
+from contracts.context_schema import TokenMeasurement
 
 
 class Answer(BaseModel):
@@ -235,9 +235,9 @@ def test_reserved_token_cap_preflight_consumes_no_provider_quota():
 
 
 def test_planner_falls_back_to_document_digest_and_expands_real_chunks():
-    from pipeline.storyboard_planner import plan_storyboard
-    from pipeline.chunker import build_chunks
-    from schemas.ir1_schema import ValidatedIR1, KnowledgeUnit, EvidenceRef
+    from infrastructure.ingestion.storyboard_planner import plan_storyboard
+    from infrastructure.ingestion.chunker import build_chunks
+    from contracts.ir1_schema import ValidatedIR1, KnowledgeUnit, EvidenceRef
     units = [KnowledgeUnit(unit_id='u'+str(i), kind='concept', title='Source fact', summary='Source content. '*600,
         section_path=['Intro'], evidence=[EvidenceRef(source_id='b'+str(i), excerpt='Source content.')],
         validation_status='VALIDATED') for i in range(12)]
@@ -259,10 +259,10 @@ def test_planner_falls_back_to_document_digest_and_expands_real_chunks():
 
 
 def test_semantic_pairs_pack_and_preserve_completed_judgments():
-    from tools.claim_verification import judge_semantics
-    from pipeline.knowledge_extractor import validate_knowledge_units
-    from schemas.ir1_schema import KnowledgeUnit, EvidenceRef
-    from schemas.raw_extraction_schema import RawExtraction, SourceBlock
+    from domain.evaluation.claim_verification import judge_semantics
+    from infrastructure.ingestion.knowledge_extractor import validate_knowledge_units
+    from contracts.ir1_schema import KnowledgeUnit, EvidenceRef
+    from contracts.raw_extraction_schema import RawExtraction, SourceBlock
     text = 'Attention uses learned weights. ' * 8
     raw = RawExtraction(document_name='x.txt', blocks=[SourceBlock(block_id='b', text=text, section_path=['S'])])
     units = [KnowledgeUnit(unit_id='u'+str(i), kind='concept', title='Attention', summary=text,
@@ -282,7 +282,7 @@ def test_semantic_pairs_pack_and_preserve_completed_judgments():
 
 def test_adaptive_vision_batches_keep_all_slide_ids_and_hash(tmp_path):
     import re
-    from pipeline.visual_reviewer import audit_slide_images
+    from infrastructure.ingestion.visual_reviewer import audit_slide_images
     images = []
     for index in range(4):
         image = tmp_path / (str(index)+'.png'); image.write_bytes(b'fixture'); images.append(str(image))

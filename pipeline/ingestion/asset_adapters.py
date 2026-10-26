@@ -3,11 +3,11 @@ import json
 import re
 from pathlib import Path
 from PIL import Image, ImageOps
-from core.artifacts import atomic_json, file_hash, sha256_value
-from core.job_context import check, report
-from schemas.asset_schema import (AssetRepresentation, FigureAssetContent, FormulaAssetContent,
+from infrastructure.utils.artifacts import atomic_json, file_hash, sha256_value
+from application.jobs.job_context import check, report
+from contracts.asset_schema import (AssetRepresentation, FigureAssetContent, FormulaAssetContent,
     PixelTransform, AssetFinding, AssetSemanticCoverage)
-from schemas.raw_extraction_schema import SourceAsset, SourceLocation, SourceBlock, RawExtraction
+from contracts.raw_extraction_schema import SourceAsset, SourceLocation, SourceBlock, RawExtraction
 from .asset_adapters_tables import table_content
 
 
@@ -122,14 +122,14 @@ def enrich_assets(raw, structural_path, run_root, options, *, caller=None, conte
             else:
                 content.representations.append(representation(path, 'original', 'application/json', 'vector_source'))
             if content.transcription_status == 'SOURCE_LITERAL' and content.expression:
-                from core.formula_renderer import render_formula
+                from domain.rendering.formula_renderer import render_formula
                 result = render_formula(content.expression, {'dpi': options.formula_dpi, 'font_size': options.formula_font_size,
                     'timeout': options.formula_timeout}, root / 'assets' / 'math-render', context=context)
                 content.render_status = result['status']
                 content.render_expression = content.expression if result['status'] == 'RENDERED' else None
                 content.representations.extend(AssetRepresentation.model_validate(r) for r in result['representations'])
             asset.content = content
-    from tools.chart_binding import bind_selected_table
+    from domain.evaluation.chart_binding import bind_selected_table
     for mapping in options.chart_mappings:
         table=next((a for a in raw.assets if a.asset_id==mapping.table_asset_id and a.kind=='table'),None)
         if table is None:
@@ -138,10 +138,10 @@ def enrich_assets(raw, structural_path, run_root, options, *, caller=None, conte
         if chart.asset_id in {a.asset_id for a in raw.assets}:
             raise ValueError('Duplicate chart mapping')
         raw.assets.append(chart)
-    from pipeline.asset_interpreter import interpret_assets
+    from infrastructure.ingestion.asset_interpreter import interpret_assets
     interpret_assets(raw, options, root, caller=caller, context=context)
     if options.describe_assets:
-        from tools.asset_description import describe_asset
+        from domain.evaluation.asset_description import describe_asset
         for asset in raw.assets:
             if isinstance(asset.content,FigureAssetContent) and (not options.description_asset_ids or asset.asset_id in options.description_asset_ids):
                 asset.content.descriptions=[describe_asset(asset,root,caller,context=context)]

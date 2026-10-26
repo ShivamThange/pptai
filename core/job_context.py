@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 from threading import Event, Lock
 from typing import Callable
-from core.llm_client import LLMCancelledError
+from infrastructure.llm.llm_client import LLMCancelledError
 
 
 @dataclass

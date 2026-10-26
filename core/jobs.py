@@ -6,8 +6,8 @@ import sqlite3
 import uuid
 from pathlib import Path
 from pydantic import TypeAdapter
-from schemas.service_schema import JobRecord, JobKind, JobStatus, TERMINAL_STATUSES
-from schemas.ingestion_schema import SourceSelection, ParseOptions, IngestionError
+from contracts.service_schema import JobRecord, JobKind, JobStatus, TERMINAL_STATUSES
+from contracts.ingestion_schema import SourceSelection, ParseOptions, IngestionError
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
@@ -134,7 +134,7 @@ class JobStore:
         return job_id
 
     def _capture(self, db, selections):
-        from pipeline.ingestion.detection import EXTENSIONS
+        from infrastructure.ingestion.detection import EXTENSIONS
         import codecs
         result, hashes = [], {}
         seen_uploads = set()

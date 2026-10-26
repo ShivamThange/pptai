@@ -1,7 +1,7 @@
 from pathlib import Path
 import pytest
-from core.formula_renderer import render_formula
-from core.artifacts import file_hash
+from domain.rendering.formula_renderer import render_formula
+from infrastructure.utils.artifacts import file_hash
 from f04_helpers import enriched
 
 
@@ -27,7 +27,7 @@ def test_markdown_exact_math_spans_currency_and_unsupported(tmp_path):
     assert len(formulas)==2
     assert any(a.content.render_status=='RENDERED' for a in formulas)
     assert any(a.content.render_status=='FORMULA_UNSUPPORTED' for a in formulas)
-    from core.asset_registry import AssetRegistry,validate_asset_content
+    from domain.extraction.asset_registry import AssetRegistry,validate_asset_content
     registry=AssetRegistry(raw.assets,source_item_ids=raw.source_item_ids)
     unsupported=next(a for a in formulas if a.content.render_status=='FORMULA_UNSUPPORTED')
     with pytest.raises(ValueError,match='FORMULA_RENDER_UNAVAILABLE'):

@@ -1,13 +1,13 @@
 """Exact source chart binding before conversion to native Office numbers."""
 from decimal import Decimal
-from core.artifacts import sha256_value
+from infrastructure.utils.artifacts import sha256_value
 
 
 def bind_selected_table(table, mapping, root):
     from pathlib import Path
-    from schemas.asset_schema import ChartMapping,ChartAssetContent,ChartPointBinding,AssetRepresentation
-    from schemas.raw_extraction_schema import SourceAsset
-    from core.artifacts import atomic_json,file_hash
+    from contracts.asset_schema import ChartMapping,ChartAssetContent,ChartPointBinding,AssetRepresentation
+    from contracts.raw_extraction_schema import SourceAsset
+    from infrastructure.utils.artifacts import atomic_json,file_hash
     import re
     mapping=ChartMapping.model_validate(mapping.model_dump() if hasattr(mapping,'model_dump') else mapping)
     if mapping.table_asset_id!=table.asset_id or not table.content or table.content.kind!='table':

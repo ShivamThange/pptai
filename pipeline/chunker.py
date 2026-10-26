@@ -7,8 +7,8 @@ import os
 from collections import defaultdict
 from pathlib import Path
 
-from schemas.ir1_schema import KnowledgeUnit, ValidatedIR1
-from schemas.storyboard_schema import TopicChunk
+from contracts.ir1_schema import KnowledgeUnit, ValidatedIR1
+from contracts.storyboard_schema import TopicChunk
 
 
 def _estimate_tokens(value: object) -> int:
@@ -64,7 +64,7 @@ def build_chunks(ir1: ValidatedIR1, *, max_tokens: int = 1800, min_units: int = 
     for units in groups:
         assets = related(units)
         identity = {'units': [u.unit_id for u in units], 'assets': assets, 'sections': [u.section_path for u in units]}
-        from core.artifacts import sha256_value
+        from infrastructure.utils.artifacts import sha256_value
         chunks.append(TopicChunk(chunk_id='chunk_' + sha256_value(identity)[:24],
             label=' / '.join(units[0].section_path), unit_ids=[u.unit_id for u in units],
             asset_ids=assets, digest=_digest(' / '.join(units[0].section_path), units), token_estimate=size(units)))
@@ -73,13 +73,13 @@ def build_chunks(ir1: ValidatedIR1, *, max_tokens: int = 1800, min_units: int = 
     return chunks
 
 
-from pipeline.context_fragments import plan_extraction_chunks
+from infrastructure.ingestion.context_fragments import plan_extraction_chunks
 
 
 def pack_context_chunks(fragments, request_factory, budget=None):
     """Merge adjacent projections only after whole-request remeasurement."""
-    from pipeline.context_fragments import combine
-    from core.context_budget import ContextBudgetError
+    from infrastructure.ingestion.context_fragments import combine
+    from infrastructure.llm.context_budget import ContextBudgetError
     packed = []
     for fragment in fragments:
         if packed and packed[-1].chunk().document_ids == fragment.chunk().document_ids:
@@ -108,8 +108,8 @@ def write_chunks(chunks: list[TopicChunk], output_dir: str | Path, *, ir1=None) 
     os.replace(temporary, target)
 
     if ir1 is not None:
-        from core.artifacts import atomic_json, sha256_value
-        from schemas.context_schema import ContextChunk, ContextRef
+        from infrastructure.utils.artifacts import atomic_json, sha256_value
+        from contracts.context_schema import ContextChunk, ContextRef
         unit_map = {u.unit_id: u for u in ir1.units}
         sidecars = []
         for chunk in chunks:

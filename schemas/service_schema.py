@@ -1,8 +1,8 @@
 """Public submission contracts. Provider configuration belongs to the server."""
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from schemas.ingestion_schema import SourceSelection, ParseOptions, SelectedType
-from schemas.asset_schema import AssetOptions
+from contracts.ingestion_schema import SourceSelection, ParseOptions, SelectedType
+from contracts.asset_schema import AssetOptions
 
 JobKind = Literal["parse", "generate", "edit_slide"]
 JobStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
@@ -44,7 +44,7 @@ class GenerationRequest(RequestModel):
         if self.min_slides > self.max_slides:
             raise ValueError("min_slides must not exceed max_slides")
         if self.theme != "auto":
-            from core.theme_engine import available_themes
+            from domain.rendering.theme_engine import available_themes
             if self.theme not in available_themes():
                 raise ValueError(f"Unknown theme '{self.theme}'. Available: auto, {', '.join(sorted(available_themes()))}")
         return self

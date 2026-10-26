@@ -1,10 +1,10 @@
 """Lossless source projections used by the existing extractor, never a fact store."""
 import re
 from dataclasses import dataclass
-from core.artifacts import sha256_value, portable_value
-from core.context_budget import ContextBudgetError
-from schemas.context_schema import ContextRef, ContextChunk
-from schemas.raw_extraction_schema import SourceBlock, SourceAsset
+from infrastructure.utils.artifacts import sha256_value, portable_value
+from infrastructure.llm.context_budget import ContextBudgetError
+from contracts.context_schema import ContextRef, ContextChunk
+from contracts.raw_extraction_schema import SourceBlock, SourceAsset
 
 
 def reference(item, representation, value, *, span=None, row=None, column=None):

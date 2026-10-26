@@ -1,9 +1,9 @@
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
-from schemas.raw_extraction_schema import SourceAsset, SourceLocation, SourceBlock
-from schemas.asset_schema import AssetSourceItem, AssetSemanticCoverage
-from schemas.ingestion_schema import DocumentDescriptor
+from contracts.raw_extraction_schema import SourceAsset, SourceLocation, SourceBlock
+from contracts.asset_schema import AssetSourceItem, AssetSemanticCoverage
+from contracts.ingestion_schema import DocumentDescriptor
 
 class KeyMetric(BaseModel):
     value: str = Field(description="Numerical metric or value (e.g. '$12M', '45%')")

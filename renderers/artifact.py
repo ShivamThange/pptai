@@ -4,8 +4,8 @@ import json
 from zipfile import ZipFile, ZIP_DEFLATED
 from lxml import etree
 from pptx import Presentation
-from core.quality_metadata import PREFIX
-from core.chart_content import native_series_name
+from domain.evaluation.quality_metadata import PREFIX
+from domain.rendering.chart_content import native_series_name
 
 NS = {"p": "http://schemas.openxmlformats.org/presentationml/2006/main",
       "a": "http://schemas.openxmlformats.org/drawingml/2006/main"}

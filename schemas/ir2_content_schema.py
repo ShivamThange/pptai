@@ -1,7 +1,7 @@
 from typing import Annotated, List, Dict, Any, Optional, Literal, Union
 from pydantic import BaseModel, Field, model_validator
-from schemas.ir1_schema import ValidationResult
-from schemas.asset_schema import TableSelection
+from contracts.ir1_schema import ValidationResult
+from contracts.asset_schema import TableSelection
 
 
 class HeadingContent(BaseModel):

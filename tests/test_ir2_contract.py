@@ -4,8 +4,8 @@ import pytest
 from pydantic import ValidationError
 from pptx import Presentation
 
-from core.builder import PresentationBuilder
-from schemas.ir2_content_schema import TargetIR2Presentation
+from application.jobs.builder import PresentationBuilder
+from contracts.ir2_content_schema import TargetIR2Presentation
 
 
 ROOT = Path(__file__).parents[1]

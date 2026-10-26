@@ -1,8 +1,8 @@
 import pytest
-from schemas.asset_schema import AssetOptions, TableAssetContent, TableSelection
-from schemas.raw_extraction_schema import RawExtraction
-from schemas.raw_extraction_schema import RawExtraction
-from schemas.ir1_schema import ValidatedIR1
+from contracts.asset_schema import AssetOptions, TableAssetContent, TableSelection
+from contracts.raw_extraction_schema import RawExtraction
+from contracts.raw_extraction_schema import RawExtraction
+from contracts.ir1_schema import ValidatedIR1
 
 
 def load_raw(value):

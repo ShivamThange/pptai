@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
-from schemas.ir1_schema import EvidenceRef
+from contracts.ir1_schema import EvidenceRef
 
 VerificationProfile = Literal["basic", "deep"]
 VerificationStatus = Literal["VERIFIED", "BASIC_CHECKED", "REJECTED", "FAILED_TO_RUN", "UNKNOWN", "NOT_EVALUATED"]

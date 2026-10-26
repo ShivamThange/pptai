@@ -3,9 +3,9 @@ import csv
 import io
 from itertools import islice
 from pathlib import Path
-from schemas.ingestion_schema import IngestionError, ParseFinding
-from pipeline.ingestion.detection import decode_text
-from core.job_context import check
+from contracts.ingestion_schema import IngestionError, ParseFinding
+from infrastructure.ingestion.detection import decode_text
+from application.jobs.job_context import check
 from .common import base, block, table, finish
 
 

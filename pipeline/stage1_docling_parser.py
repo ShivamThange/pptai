@@ -12,14 +12,14 @@ PAGE_FURNITURE_KINDS = {"page_header", "page_footer", "footnote", "header", "foo
 def run_docling_extraction(source_path: str, output_dir: str = "output", use_gpu: bool = False,
                            *, resolved_options=None, context=None, limits=None) -> Dict[str, Any]:
     """Compatibility wrapper using the same explicit routing as service intake."""
-    from pipeline.ingestion.router import resolve_options
-    from pipeline.ingestion.adapters.docling import convert
+    from infrastructure.ingestion.router import resolve_options
+    from infrastructure.ingestion.adapters.docling import convert
     options = resolved_options or resolve_options(source_path, use_gpu=use_gpu)[0]
     return run_docling_extraction_for_type(source_path, output_dir, options, context=context, limits=limits)
 
 
 def run_docling_extraction_for_type(source_path, output_dir, resolved_options, *, context=None, limits=None):
-    from pipeline.ingestion.adapters.docling import convert
+    from infrastructure.ingestion.adapters.docling import convert
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     return convert(source_path, output_dir, resolved_options, context=context, limits=limits)
 

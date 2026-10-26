@@ -6,11 +6,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-from core.artifacts import write_validated_json
-from core.context_budget import ContextBudgetError
-from pipeline.knowledge_extractor import StructuredCaller
-from schemas.ir1_schema import ValidatedIR1
-from schemas.storyboard_schema import Storyboard, TopicChunk
+from infrastructure.utils.artifacts import write_validated_json
+from infrastructure.llm.context_budget import ContextBudgetError
+from infrastructure.ingestion.knowledge_extractor import StructuredCaller
+from contracts.ir1_schema import ValidatedIR1
+from contracts.storyboard_schema import Storyboard, TopicChunk
 
 
 def build_layout_catalog(layouts_spec: dict[str, Any]) -> dict[str, Any]:
@@ -267,8 +267,8 @@ VISUAL OBJECTS: prefer a predefined object over a plain text box when the conten
                     raise
                 # One deterministic hierarchy entry per original document, with
                 # required critical facts and recoverable representative IDs.
-                from pipeline.chunker import _document
-                from core.artifacts import sha256_value
+                from infrastructure.ingestion.chunker import _document
+                from infrastructure.utils.artifacts import sha256_value
                 documents = {}
                 for unit in ir1.units:
                     documents.setdefault(_document(unit), []).append(unit)

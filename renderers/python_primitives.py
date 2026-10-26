@@ -5,7 +5,7 @@ Native Python primitives retained from the migration backend.
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-from core.asset_registry import AssetBindingError
+from domain.extraction.asset_registry import AssetBindingError
 
 from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
