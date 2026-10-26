@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PPTAI Studio — document to deck pipeline</title>
+<link rel="stylesheet" href="studio.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo" aria-hidden="true"></span><span class="wordmark">PPTAI<b>Studio</b></span></div>
+  <div class="top-status">
+    <span id="worker-pill" class="pill state-offline" title="Local worker liveness">
+      <i class="dot"></i><span id="worker-state">worker offline</span>
+    </span>
+    <span id="model-chip" class="chip" title="Effective provider configuration">loading…</span>
+    <a class="ghost-link" href="/upload/" title="Legacy minimal uploader">classic&nbsp;uploader</a>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- ============ LEFT: sources + settings ============ -->
+  <section class="col-left">
+    <div class="card" id="upload-card">
+      <div class="card-head">
+        <h2><span class="step">1</span> Sources</h2>
+        <span class="hint" id="formats-hint">checking supported formats…</span>
+      </div>
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload documents">
+        <div class="dz-inner">
+          <div class="dz-icon" aria-hidden="true">+</div>
+          <div class="dz-title">Drop documents here</div>
+          <div class="dz-sub">or <span class="linklike">browse files</span> — PDF, DOCX, TXT, MD, CSV, XLSX, PNG, JPEG</div>
+        </div>
+      </div>
+      <input type="file" id="file-input" multiple hidden>
+      <ul id="doc-list" class="doc-list"></ul>
+    </div>
+
+    <div class="card" id="settings-card">
+      <div class="card-head"><h2><span class="step">2</span> Generation settings</h2></div>
+      <div class="grid2">
+        <label class="field">
+          <span>Narrative lens</span>
+          <select id="lens">
+            <option value="academic" selected>Academic — papers &amp; research</option>
+            <option value="executive">Executive — business summaries</option>
+            <option value="technical">Technical — deep detail</option>
+            <option value="pitch">Pitch — persuasive</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Extraction mode</span>
+          <select id="extraction_mode">
+            <option value="llm" selected>LLM — model-condensed units</option>
+            <option value="source-passages">Source passages — verbatim blocks</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Visual polish</span>
+          <select id="polish">
+            <option value="off" selected>Off — fastest, no vision audit</option>
+            <option value="auto">Auto — render + judge audit</option>
+            <option value="all">All — render + judge audit</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Source visuals</span>
+          <select id="asset_understanding">
+            <option value="structured" selected>Understand every figure / formula / table</option>
+            <option value="legacy">Skip asset AI — prose only (faster)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Renderer</span>
+          <select id="renderer">
+            <option value="python" selected>Python (python-pptx)</option>
+            <option value="pptxgenjs">pptxgenjs (Node)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Theme</span>
+          <select id="theme">
+            <option value="auto" selected>Auto — follows the lens</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Slides — min</span>
+          <input id="min_slides" type="number" min="1" max="30" value="5">
+        </label>
+        <label class="field">
+          <span>Slides — max</span>
+          <input id="max_slides" type="number" min="1" max="30" value="10">
+        </label>
+        <label class="field">
+          <span>Repairs per slide</span>
+          <input id="max_repairs_per_slide" type="number" min="0" max="5" value="2">
+        </label>
+        <label class="field">
+          <span>Concurrency</span>
+          <input id="max_concurrency" type="number" min="1" max="8" value="2">
+        </label>
+      </div>
+      <label class="field check">
+        <input id="dynamic_layout" type="checkbox" checked>
+        <span>Dynamic layout — measure content and re-solve slide geometry (F13)</span>
+      </label>
+      <label class="field check">
+        <input id="deep_verification" type="checkbox">
+        <span>Deep verification — semantic judging of every unit (slower, stricter)</span>
+      </label>
+      <label class="field check">
+        <input id="resume_cache" type="checkbox">
+        <span>Resume from cache — reuse validated checkpoints (extraction &amp; slides)</span>
+      </label>
+      <label class="field">
+        <span>Instruction <em>(optional, e.g. “emphasize the ablation results”)</em></span>
+        <textarea id="instruction" rows="2" placeholder="Optional guidance for the storyboard and slides"></textarea>
+      </label>
+      <div class="generate-actions">
+        <button id="generate" class="primary" disabled>
+          <span class="btn-label">Generate deck</span>
+          <span class="btn-sub" id="generate-sub">upload and parse a source first</span>
+        </button>
+        <button id="resume-generate" class="secondary" disabled title="Generate or resume deck using cached extraction and slide checkpoints">
+          <span class="btn-label">⚡ Resume generation</span>
+          <span class="btn-sub" id="resume-sub">reuse cache / checkpoints</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RIGHT: jobs + decks ============ -->
+  <section class="col-right">
+    <div class="card" id="jobs-card">
+      <div class="card-head">
+        <h2><span class="step">3</span> Jobs</h2>
+        <span class="hint">live pipeline progress</span>
+      </div>
+      <div id="jobs" class="jobs"><div class="empty">No jobs yet — upload a document to begin.</div></div>
+    </div>
+
+    <div class="card grow" id="decks-card">
+      <div class="card-head">
+        <h2><span class="step">4</span> Decks</h2>
+        <button id="refresh-decks" class="ghost" title="Reload deck list">⟳ refresh</button>
+      </div>
+      <div id="decks" class="deck-list"><div class="empty">No decks yet.</div></div>
+      <div id="deck-detail" class="deck-detail" hidden></div>
+    </div>
+  </section>
+</main>
+
+<div id="toast-root" aria-live="polite"></div>
+<script src="studio.js"></script>
+</body>
+</html>

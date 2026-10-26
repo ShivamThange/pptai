@@ -1,0 +1,3 @@
+# Optional rendered-slide audit backends.
+pywin32; platform_system == "Windows"
+PyMuPDF

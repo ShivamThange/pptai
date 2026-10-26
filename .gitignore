@@ -1,0 +1,38 @@
+# Secret & Environment Variables (API Keys)
+.env
+.env.*
+!.env.example
+env/
+venv/
+.venv/
+
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing & Pytest Temporary Files
+.pytest_cache/
+.pytest_tmp/
+**/pytest_tmp/
+
+# Model & Pipeline Outputs
+output/
+output-*/
+*.pptx
+
+# Notebooks & IDE Cache
+.ipynb_checkpoints/
+extract_data.ipynb
+.vscode/
+.idea/
+
+# Document files (Note: remove *.pdf if you want to track sample input PDFs in git)
+*.pdf
+!tests/fixtures/ingestion/*.pdf
+
+# Logs
+*.log
+
+# Local Node renderer dependencies
+node_modules/

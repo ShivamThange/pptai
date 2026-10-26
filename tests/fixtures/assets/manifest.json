@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "files": {
+    "assets.docx": {
+      "sha256": "aef81414b05912c0614cb4f10ad518fe4a62c6bbd08f8b40c5c65e4d3a45bb74",
+      "fixture": true
+    },
+    "chart-picture.png": {
+      "sha256": "e0a9ad3d4319952390a38f6dae6be97c637d6e5a8f5efa8f9e91b8550f7d770e",
+      "fixture": true
+    },
+    "charts.xlsx": {
+      "sha256": "6e929ae03444ff9a94a1cb037bf5f7ec070152634f8f1351332f06573b366eef",
+      "fixture": true
+    },
+    "embedded-chart.docx": {
+      "sha256": "5d9a6e20c68704c1cdc47fe5c964cde319d5b0f1947b6b6c8583fe1890dac4ed",
+      "fixture": true
+    },
+    "formula.md": {
+      "sha256": "1bfa44197ad2593feec6e028dc88f6045e93098187ad6e6bc0d1da496ca35571",
+      "fixture": true
+    },
+    "lexemes.csv": {
+      "sha256": "2903c9d89b58c18e5d5a5bec72480f492726be2c1b0f164d8e43a834eb4bbb42",
+      "fixture": true
+    },
+    "oriented-1.jpg": {
+      "sha256": "8ce8fcadfb4565ad25ee0dc99d938e3225ca9e9cd6748dedce7a5a918e820ade",
+      "fixture": true
+    },
+    "oriented-2.jpg": {
+      "sha256": "3df10436e11b3dd0c9ca2c2c1d89ae8642b9d5e56463903fd838fa4ee84f6681",
+      "fixture": true
+    },
+    "oriented-3.jpg": {
+      "sha256": "c1b8dd6217b47fdae7f55054870fffbf383228a76f1ffaad7d3ac975fa1b6b92",
+      "fixture": true
+    },
+    "oriented-4.jpg": {
+      "sha256": "77ba6320b27996a440c8d078b6b88898b5844998809503fae9adcc35817b4a70",
+      "fixture": true
+    },
+    "oriented-5.jpg": {
+      "sha256": "cd649a650be46d607820fd58e34b4ccfc19f5703e24d7d29e7f7f35d39e6b147",
+      "fixture": true
+    },
+    "oriented-6.jpg": {
+      "sha256": "d97c2316e3f63528e23066da87ca90846d6649936a17ca1c6d04e9f7598a6626",
+      "fixture": true
+    },
+    "oriented-7.jpg": {
+      "sha256": "318dd7f8759801e10af710d009be63e6029d235ee5486f1b269cdee42ec91cb8",
+      "fixture": true
+    },
+    "oriented-8.jpg": {
+      "sha256": "8ce09ec9676659b488c57eb3bc9853e301113017f8ad7685b046be231cc73f45",
+      "fixture": true
+    },
+    "results.csv": {
+      "sha256": "83017eb3b364ebb43fc45bed82699253390b8bac4e3274d146692aa7e39e8a53",
+      "fixture": true
+    }
+  },
+  "expected": {
+    "results": {
+      "difference": "10",
+      "unit": "percentage points"
+    },
+    "merge": "Results!A199:A202",
+    "chart_categories": [
+      "Method A",
+      "Method B"
+    ],
+    "chart_values": [
+      "80",
+      "90"
+    ],
+    "formula": "\\frac{\\sum_i x_i}{n}",
+    "currency_formula_count": 0
+  }
+}

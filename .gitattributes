@@ -1,0 +1,4 @@
+# Ingestion fixtures bind exact original bytes, including line endings and
+# intentionally malformed content. Never normalize them during Git checkout.
+tests/fixtures/ingestion/* -text -diff
+tests/fixtures/ingestion/manifest.json text eol=lf diff

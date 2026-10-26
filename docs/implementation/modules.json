@@ -1,0 +1,700 @@
+{
+  "schema_version": 1,
+  "prepared_date": "2026-10-08",
+  "base_plan_sha256": "3192dca7b37a1e76483d27f37375a95f3211e2a23a115e6dd8bea458d15f8a71",
+  "implementation_base_branch": "multi-agent",
+  "implementation_base_commit": "24e8a3a1d8e9a2684348194ae4149a2c8c263107",
+  "reference_branch_commit": "e534ff1c6b9d6e6846b1508a39f0bd2add5e60df",
+  "modules": [
+    {
+      "id": "R01",
+      "slug": "llm_gateway_reliability",
+      "title": "LLM gateway and provider failure repair",
+      "kind": "Repair",
+      "current_state": "Repaired gateway",
+      "implementation_status": "VERIFIED",
+      "phase": 0,
+      "dependencies": [],
+      "workflow_points": [
+        "12",
+        "13",
+        "19"
+      ],
+      "verification": {
+        "date": "2026-10-08",
+        "scope": "R01 transport/configuration/observability",
+        "base_commit": "24e8a3a1d8e9a2684348194ae4149a2c8c263107",
+        "working_tree_changes": true,
+        "source_bundle_sha256": "95dbd3bd0541835999dbbc08dd6525fa41a6094f0145dcc7e54f26ddfa2f1ddb",
+        "evidence": "C:\\Users\\thang\\Projects\\PPTAI\\audit-artifacts\\r01\\verification.json",
+        "live_pptx_sha256": "a6551e609cb7fca9fd4f1e256e55a10ab9d97068ef0619727db8902019e9d15a",
+        "unavailable_checks": [
+          "Live Gemini endpoint: not run; SDK adapter validated with injected client.",
+          "PowerPoint/LibreOffice visual rendering: not run for R01; renderer code unchanged.",
+          "Full uploaded-document benchmark: not run for R01."
+        ],
+        "automated_tests_passed": 50
+      }
+    },
+    {
+      "id": "R02",
+      "slug": "provenance_and_assets_repair",
+      "title": "Existing provenance, captions, and asset binding repair",
+      "kind": "Repair",
+      "current_state": "Repaired provenance and bindings",
+      "implementation_status": "VERIFIED",
+      "phase": 0,
+      "dependencies": [],
+      "workflow_points": [
+        "6",
+        "8",
+        "16",
+        "17"
+      ],
+      "verification": {
+        "date": "2026-10-08",
+        "scope": "R02 current Docling provenance, captions, asset binding, native table preservation",
+        "base_commit": "24e8a3a1d8e9a2684348194ae4149a2c8c263107",
+        "working_tree_changes": true,
+        "source_bundle_sha256": "b28a0a90afb0e4dcb17eefa2da08fcdd957163719a6be3071137b771a5ae7daa",
+        "evidence": "C:\\Users\\thang\\Projects\\PPTAI\\audit-artifacts\\r02\\verification.json",
+        "automated_tests_passed": 85,
+        "sample_pptx_sha256": "3c5b049bf82557deae0a43c2972d802fcf2dbdf596968324da24b3211433ae02",
+        "native_render_backend": "powerpoint-com",
+        "limitations": [
+          "No new live LLM/provider generation run for R02; gateway regressions and scoped composition/editing are covered by tests. Actual Docling PDF extraction and PowerPoint rendering ran without mocked success.",
+          "Visual quality, OCR correctness, native equation reconstruction, rich-format expansion, and the full uploaded-document benchmark are outside this verification. A small inline formula crop remains a low-resolution image, and dense tables retain the current renderer sizing.",
+          "Ambiguous captions stay UNKNOWN. The sample's left Figure 2 panel uses an explicitly recorded SHARED_PANEL_GEOMETRY inference from the genuine left/right caption and same-page geometry.",
+          "Legacy structural-v1 assets with missing provenance/cell references require re-extraction before required use; the adapter preserves unknowns and original artifacts."
+        ]
+      }
+    },
+    {
+      "id": "R03",
+      "slug": "grounding_validation_repair",
+      "title": "Numeric and claim grounding repair",
+      "kind": "Repair",
+      "current_state": "Repaired grounding and scoped coverage",
+      "implementation_status": "VERIFIED",
+      "phase": 0,
+      "dependencies": [
+        "R02"
+      ],
+      "workflow_points": [
+        "8",
+        "9",
+        "16",
+        "26"
+      ],
+      "verification": {
+        "date": "2026-10-09",
+        "scope": "R03 mandatory grounding, metric/cell/calculation checks, coverage repair, optional evidence-scoped judgments",
+        "base_commit": "24e8a3a1d8e9a2684348194ae4149a2c8c263107",
+        "working_tree_changes": true,
+        "source_bundle_sha256": "739fea541fe8bd5916d64b4f22b79cf38a973c8d866054039a42ecc68f96a27b",
+        "evidence": "C:/Users/thang/Projects/PPTAI/audit-artifacts/r03/verification.json",
+        "automated_tests_passed": 144,
+        "sample_pptx_sha256": "16ba25f9e1cbf66d5bfcda0f5155115d0f53f889862d8f5adf45da7a60cfc8b4",
+        "native_render_backend": "powerpoint-com",
+        "final_live_pipeline_status": "BLOCKED_UNSUPPORTED_CLAIMS",
+        "limitations": [
+          "Deterministic numeric matching is conservative: ambiguous labels, implicit units/periods, rounded derivations and noncanonical notation may require review or clearer evidence; semantic inference is optional and probabilistic.",
+          "Coverage tracks source blocks, extracted important rejected units, numeric source mentions and table cells; exhaustive semantic concept coverage remains F07/F05 work.",
+          "Live Gemini endpoint, full uploaded-document benchmark, expanded-format parsing and evaluator F19 integration not run for R03.",
+          "An exploratory judge accepted an unsupported evaluative title. The final prompts require a source assessment/benchmark; the calibration probe retains that claim as UNKNOWN. Neither UNKNOWN nor BASIC_CHECKED means full entailment.",
+          "An intermediate live extraction mistyped a source hash in nested metric evidence. It was rejected and retained as incomplete; scoped retries now receive validation feedback. Some live slide responses exhausted schema retries.",
+          "The final live end-to-end run was correctly blocked at composition: the provider invented a 20% margin without validated calculation operands and then omitted metric context in repair. No final live LLM PPTX is claimed. Current-source native rendering acceptance uses a golden source fixture with real validation/build/PowerPoint COM, without a mocked renderer or judge."
+        ]
+      }
+    },
+    {
+      "id": "R04",
+      "slug": "quality_gate_repair",
+      "title": "Geometry and final-artifact quality gate repair",
+      "kind": "Repair",
+      "current_state": "Repaired geometry and artifact-bound gates",
+      "implementation_status": "VERIFIED",
+      "phase": 0,
+      "dependencies": [],
+      "workflow_points": [
+        "11",
+        "23a",
+        "25",
+        "26",
+        "28"
+      ],
+      "verification": {
+        "date": "2026-10-09",
+        "scope": "R04 geometry, native extraction/readability and final-artifact quality readiness",
+        "base_commit": "24e8a3a1d8e9a2684348194ae4149a2c8c263107",
+        "working_tree_changes": true,
+        "source_bundle_sha256": "3bb38da464ea03eb8320c2e99085412aff8d663a0c819159ab2ebb2761884ef5",
+        "evidence": "C:\\Users\\thang\\Projects\\PPTAI\\audit-artifacts\\r04\\verification.json",
+        "automated_tests_passed": 177,
+        "r04_test_cases": 33,
+        "sample_pptx_sha256": "a4580ea9039a8b6b0bb702ff2be66c6b09ac2f5f7d50b1fd6fa4debd068d9332",
+        "native_render_backend": "powerpoint-com",
+        "final_live_judge_status": "FAILED_TO_RUN",
+        "final_live_readiness": "DRAFT_INCOMPLETE",
+        "final_live_reason": "OpenRouter HTTP 402 billing",
+        "limitations": [
+          "Golden source fixture supplies extraction/composition content; this is not a full live LLM content-generation benchmark.",
+          "Optional vision/semantic judges are probabilistic. Earlier visual judge passed overflowing allocated bounds; measured critical findings still block readiness.",
+          "Native geometry uses axis-aligned approximate envelopes. Rotated/flipped groups are explicitly incomplete. Some theme/table/chart inherited fonts remain unknown; required explicit small fonts are detected.",
+          "PowerPoint measured text overflow includes overflow outside allocated boxes, not a complete pixel/OCR clipping or contrast detector. Rendered visual judging remains optional.",
+          "LibreOffice fallback, live Gemini, full uploaded-document benchmark and full F19 mathematical metric redesign not run.",
+          "R05 owns immutable atomic multi-file revision publication/concurrency; R04 preserves previous PPTX/IR2/report on rejected edit/repair but does not claim R05 completion."
+        ]
+      }
+    },
+    {
+      "id": "R05",
+      "slug": "cache_resume_revision_repair",
+      "title": "Cache, resume, and atomic revision repair",
+      "kind": "Repair",
+      "current_state": "Repaired current CLI cache/resume and revision publication",
+      "implementation_status": "VERIFIED",
+      "phase": 0,
+      "dependencies": [],
+      "workflow_points": [
+        "14",
+        "24",
+        "27"
+      ],
+      "verification": {
+        "date": "2026-10-09",
+        "scope": "R05 current CLI cache/resume, immutable revision publication, edit concurrency and process interruption",
+        "base_commit": "24e8a3a1d8e9a2684348194ae4149a2c8c263107",
+        "working_tree_changes": true,
+        "source_bundle_sha256": "550b6e8d939c9ee87e61c7bcd506fed06fc78e76284df4f34347ae4a0c536864",
+        "native_pptx_sha256": "673748402e078c04c0bd3bdd34d7bc1a12d6da74b4438825a0e9973175d044ec",
+        "native_revision_id": "b97abfadce2b435786ba9573cf11c491",
+        "native_readiness": "BASIC_CHECKED",
+        "evidence": "C:/Users/thang/Projects/PPTAI/audit-artifacts/r05/verification.json",
+        "automated_tests_passed": 201,
+        "module_cases": 24,
+        "unavailable_checks": [
+          "No new live LLM provider/full uploaded-document benchmark; native generation is a typed source fixture.",
+          "POSIX locking and LibreOffice fallback were not exercised; Windows local filesystem/PowerPoint COM were.",
+          "Hardware power-loss/network-filesystem durability, cache GC, chat/history UI and suggestion generation are outside this evidence."
+        ]
+      }
+    },
+    {
+      "id": "R06",
+      "slug": "renderer_branch_integration",
+      "title": "PptxGenJS branch adaptation and renderer parity",
+      "kind": "Repair / integration",
+      "current_state": "Repaired shared scene/native renderer parity",
+      "implementation_status": "VERIFIED",
+      "phase": 1,
+      "dependencies": [
+        "R02",
+        "R04"
+      ],
+      "workflow_points": [
+        "11",
+        "18",
+        "25",
+        "28"
+      ],
+      "verification": {
+        "date": "2026-10-09",
+        "scope": "R06 scene contract, locked renderer adaptation, supported native-object parity, native editability and current CLI/revision integration",
+        "base_commit": "4e76a020951c6002a1cb577b01723b9e6d480e80",
+        "working_tree_changes": true,
+        "source_bundle_sha256": "8f2214bf95b3495fe1760eaa1f9b4bbb859372bac436b49efac6165f9657f5f1",
+        "evidence": "C:\\Users\\thang\\Projects\\PPTAI\\audit-artifacts\\r06\\verification.json",
+        "automated_tests_passed": 242,
+        "r06_tests_passed": 41,
+        "native_render_backend": "powerpoint-com",
+        "pptxgenjs_version": "3.12.0",
+        "python_pptx_version": "1.0.2",
+        "nine_table_pptx_sha256": "34c05c1b29d3c294fcc88d536362f3b830caf96c7b0402076eff57032cc2240f",
+        "parity_pptx_sha256": "af0cd6d1442bdc6f85ae4a9a2b0688e5ea40d1f6bbb5123ba237a2d5cdbde6ff",
+        "edited_pipeline_pptx_sha256": "bd588d117812bcce963396e936d0685af87f8b8871669082342d8f9c0ee753bd",
+        "unavailable_checks": [
+          "No new live LLM/provider generation benchmark; pipeline content is typed source-backed fixtures, with real builders, validators, PowerPoint COM and revision publication.",
+          "LibreOffice/POSIX deployment, Office versions other than the installed Windows environment and full uploaded-document benchmark remain unrun. Python remains the migration default; JS is explicitly selected.",
+          "Legacy IR2 layout expansion is a versioned migration adapter. F13 dynamic solving, F14 Mermaid/Dagre, labeled legacy edges, arbitrary native object families and editable equations remain outside R06. Unsupported labels/types fail; a resolved text object can carry a direct-scene edge label. Raster image/formula editability is reported accurately.",
+          "Native geometry/text bounds and existing role floors pass the fixtures; this does not certify pixel-identical typography, all inherited theme/chart fonts, visual aesthetics or deep factual/visual judging. Native pipeline readiness is BASIC_CHECKED."
+        ]
+      }
+    },
+    {
+      "id": "F01",
+      "slug": "api_jobs_and_service",
+      "title": "Shared API, jobs, and progress service",
+      "kind": "Feature",
+      "current_state": "Local SQLite/API/shared service/sequential worker",
+      "implementation_status": "VERIFIED",
+      "phase": 1,
+      "dependencies": [
+        "R01",
+        "R05"
+      ],
+      "workflow_points": [
+        "1",
+        "3",
+        "4",
+        "23a",
+        "27"
+      ],
+      "verification": {
+        "date": "2026-10-13",
+        "scope": "F01 local SQLite/API/shared service/sequential worker; Windows PDF/Markdown and native renderer integration",
+        "base_commit": "965815bc662335f73dea87d2047fa434cd7ea1eb",
+        "working_tree_changes": true,
+        "source_bundle_sha256": "2ff397cee2ca9c5ef0fe7d82faef88ea564bc25b883a93b3c32bcd84abc65ef2",
+        "automated_tests_passed": 299,
+        "baseline_tests_passed": 270,
+        "final_cli_tests_passed": 9,
+        "evidence": "C:\\Users\\thang\\Projects\\PPTAI\\audit-artifacts\\f01\\verification.json",
+        "native_edited_pptx_sha256": {
+          "python": "b2dc8e84abb2f3b6debbeaf00862fd4b5de9f63b9d792cee0e5cef41ae014193",
+          "pptxgenjs": "d32164ff5bcd86e1cb92fa21681e3131bf042687d1b454b6020bdfccb482e08a"
+        },
+        "limitations": [
+          "Typed source-grounded model fixtures; no new live-provider certification.",
+          "Native gate is real PowerPoint COM, BASIC_CHECKED with optional deep/visual judging off.",
+          "POSIX/LibreOffice/other Office versions and full-document/scanned-file benchmarks unrun.",
+          "HTTP acceptance uses TestClient and the actual worker implementation; no external-process HTTP soak/load test.",
+          "One local worker/disk, cooperative cancellation; no SQL/filesystem crash reconciliation, auth, pause, idempotency or deployment.",
+          "F02 expanded formats, F03 briefs, F15-F17 UI/chat and F18 PDF export remain planned."
+        ]
+      }
+    },
+    {
+      "id": "F02",
+      "slug": "uploads_and_docling_routing",
+      "title": "Uploads, file-type dropdown, and Docling routing",
+      "kind": "Feature",
+      "current_state": "Eight structural formats, ordered multi-source intake, raw-v3 provenance/collections, staged cache, shared API/CLI and same-origin upload page",
+      "implementation_status": "VERIFIED",
+      "phase": 1,
+      "dependencies": [
+        "F01",
+        "R02"
+      ],
+      "workflow_points": [
+        "1",
+        "3",
+        "4",
+        "5"
+      ],
+      "verification": {
+        "date": "2026-10-13",
+        "scope": "Local Q05 intake, eight format adapters, raw-v3 provenance, complete-only cache, ordered source collections, API/CLI/intake DOM and Windows native generation/edit/resume",
+        "base_commit": "2fa462dbc775ebba6868e1df5fc08196783549cb",
+        "working_tree_changes": true,
+        "source_bundle_sha256": "9824697a5b2b4f900b98330c666bebb8eb4d9469df4cd0bbc18e0429a0cf8d0b",
+        "automated_tests_passed": 362,
+        "ui_smoke_checks_passed": 13,
+        "readiness": "BASIC_CHECKED",
+        "limits_and_unrun_checks": [
+          "Q11 workload/scale remains pending; large/sparse workbook, full-document and OCR accuracy benchmarking not performed.",
+          "CUDA, POSIX/LibreOffice, other Office versions, live providers and external HTTP load/soak testing not performed.",
+          "Intake UI is tested through jsdom DOM requests/state and real backend tests; no cross-browser visual/accessibility certification.",
+          "Partial Docling/OCR-unavailable failures are injected counterexamples; small successful promised-format fixtures use real adapters.",
+          "F04 semantic image/chart/formula interpretation, F03 briefs, F15-F17 review/chat and F18 PDF export remain outside F02."
+        ],
+        "evidence": "C:\\Users\\thang\\Projects\\PPTAI\\audit-artifacts\\f02\\verification.json",
+        "native_render_backend": "powerpoint-com",
+        "model_answers": "Typed source-grounded fixtures; no live provider calls",
+        "python_edited_pptx_sha256": "4d7409c478e4847b6703940b00e18836aa77ac49af84b91c3873dace041193d5",
+        "pptxgenjs_edited_pptx_sha256": "53fdf07b54f6cf22f97cf2c5e952be2140c0b34325aa4a390b5bef03c056b3fc"
+      }
+    },
+    {
+      "id": "F03",
+      "slug": "prompt_enhancement_and_audience",
+      "title": "User prompt, enhancement, and audience mode",
+      "kind": "Feature",
+      "current_state": "Missing / partial",
+      "implementation_status": "NOT_STARTED",
+      "phase": 1,
+      "dependencies": [
+        "R01"
+      ],
+      "workflow_points": [
+        "2",
+        "3",
+        "10"
+      ]
+    },
+    {
+      "id": "F04",
+      "slug": "multimodal_asset_content",
+      "title": "Images, tables, charts, formulas, and asset content",
+      "kind": "Feature",
+      "current_state": "Structured assets, semantic-to-text adapter, inspection; live Q22 unavailable",
+      "implementation_status": "IMPLEMENTED_UNVERIFIED",
+      "phase": 2,
+      "dependencies": [
+        "F02",
+        "R02"
+      ],
+      "workflow_points": [
+        "6",
+        "17"
+      ],
+      "verification": {
+        "date": "2026-10-13",
+        "base_commit": "6c9c8c1d81fb35591ac810b73f73dd5bcf845c65",
+        "branch": "feature/f04-multimodal-assets",
+        "regression_passed": 417,
+        "final_targeted_passed": 94,
+        "native_backends": [
+          "python",
+          "pptxgenjs"
+        ],
+        "live_semantics": "UNAVAILABLE_HTTP_404",
+        "evidence": "C:\\Users\\thang\\Projects\\PPTAI\\audit-artifacts\\f04\\verification.json"
+      }
+    },
+    {
+      "id": "F05",
+      "slug": "ir1_source_knowledge",
+      "title": "Canonical IR1 with actual document references",
+      "kind": "Feature",
+      "current_state": "Partial",
+      "implementation_status": "NOT_STARTED",
+      "phase": 2,
+      "dependencies": [
+        "F04",
+        "F07",
+        "R03"
+      ],
+      "workflow_points": [
+        "7",
+        "8",
+        "16"
+      ]
+    },
+    {
+      "id": "F06",
+      "slug": "optional_deep_source_verification",
+      "title": "Optional deep source verification",
+      "kind": "Feature",
+      "current_state": "Partial / unreliable",
+      "implementation_status": "NOT_STARTED",
+      "phase": 2,
+      "dependencies": [
+        "F05",
+        "R03"
+      ],
+      "workflow_points": [
+        "9"
+      ]
+    },
+    {
+      "id": "F07",
+      "slug": "context_budget_progressive_chunking",
+      "title": "Context budgets, complete coverage, and progressive chunking",
+      "kind": "Feature / repair",
+      "current_state": "Prepared request admission, progressive source/topic projections, context coverage, bounded calls, checkpoints and immutable revision integration",
+      "implementation_status": "VERIFIED",
+      "phase": 1,
+      "dependencies": [
+        "R01",
+        "R02",
+        "F02"
+      ],
+      "workflow_points": [
+        "12",
+        "13",
+        "14",
+        "19"
+      ],
+      "verification": {
+        "date": "2026-10-13",
+        "scope": "Prepared request admission, explicit capacities, progressive source/topic projections, scoped grounding and context accounting, bounded stage calls, checkpoints and immutable revisions on the local F01/F02 service",
+        "base_commit": "6c9c8c1d81fb35591ac810b73f73dd5bcf845c65",
+        "working_tree_changes": true,
+        "automated_tests_passed": 404,
+        "focused_tests_passed": 42,
+        "readiness": "BASIC_CHECKED",
+        "model_answers": "Typed source-grounded fixtures for native checks; live generation probes unavailable",
+        "source_bundle_sha256": "2a0de675b91002906f2f5af61e97e531ad1c5cb26df9813429ee6dc37cf3f071",
+        "evidence": "C:/Users/thang/Projects/PPTAI/audit-artifacts/f07/verification.json",
+        "native_pptx_sha256": {
+          "python": "013bb65b06f9b224521bec062ce1f9caa300009b07d3a6af34894ab59e20f18c",
+          "pptxgenjs": "24bf42048e2e0968638b79ca18a92f48e6641f473b3ecb39eff033c3f2758963"
+        },
+        "unavailable_checks": [
+          "Configured OpenRouter model returned HTTP 404; no live structured/source certification.",
+          "Configured Gemini returned HTTP 503 in the final probe; count/usage calibration and live media/source certification unavailable.",
+          "Q11 workload/performance SLA, full document/OCR accuracy and sparse-workbook scaling not certified.",
+          "POSIX/LibreOffice/other Office, external-process HTTP load/soak, browser/accessibility certification not run.",
+          "F04 rich media interpretation and F05/F09/F10/F19 semantic/retrieval/narrative/evaluation expansion remain separate."
+        ]
+      }
+    },
+    {
+      "id": "F08",
+      "slug": "deduplication",
+      "title": "Evidence-preserving deduplicator",
+      "kind": "Feature",
+      "current_state": "Partial",
+      "implementation_status": "NOT_STARTED",
+      "phase": 2,
+      "dependencies": [
+        "F05"
+      ],
+      "workflow_points": [
+        "15",
+        "21"
+      ]
+    },
+    {
+      "id": "F09",
+      "slug": "structured_retrieval",
+      "title": "Structured IR1 retrieval and usage references",
+      "kind": "Feature",
+      "current_state": "Partial",
+      "implementation_status": "NOT_STARTED",
+      "phase": 2,
+      "dependencies": [
+        "F08",
+        "F06"
+      ],
+      "workflow_points": [
+        "16",
+        "17",
+        "19",
+        "24"
+      ]
+    },
+    {
+      "id": "F10",
+      "slug": "dynamic_narrative",
+      "title": "Dynamic deck flow and IR1-to-IR2 skeleton",
+      "kind": "Feature",
+      "current_state": "Partial",
+      "implementation_status": "NOT_STARTED",
+      "phase": 3,
+      "dependencies": [
+        "F03",
+        "F09",
+        "F12"
+      ],
+      "workflow_points": [
+        "10",
+        "18",
+        "21"
+      ]
+    },
+    {
+      "id": "F11",
+      "slug": "ir2_content_and_suggestions",
+      "title": "IR2 visible content and editing reserve",
+      "kind": "Feature",
+      "current_state": "Partial / missing reserve",
+      "implementation_status": "NOT_STARTED",
+      "phase": 3,
+      "dependencies": [
+        "F10",
+        "F09"
+      ],
+      "workflow_points": [
+        "18",
+        "19",
+        "20",
+        "23a"
+      ]
+    },
+    {
+      "id": "F12",
+      "slug": "hybrid_agents_and_tools",
+      "title": "Hybrid agent roles, tools, and scoped retry",
+      "kind": "Feature",
+      "current_state": "Partial",
+      "implementation_status": "NOT_STARTED",
+      "phase": 2,
+      "dependencies": [
+        "R01",
+        "F09"
+      ],
+      "workflow_points": [
+        "21",
+        "24"
+      ]
+    },
+    {
+      "id": "F13",
+      "slug": "dynamic_geometry_and_layout",
+      "title": "Dynamic geometry, sizing, and slide layouts",
+      "kind": "Feature",
+      "current_state": "Theme tokens + measured dynamic geometry (5 themes, bounded archetype solver, deterministic fitting, catalog fallback)",
+      "implementation_status": "VERIFIED",
+      "phase": 3,
+      "dependencies": [
+        "F11",
+        "R04",
+        "R06"
+      ],
+      "workflow_points": [
+        "11",
+        "18",
+        "28"
+      ],
+      "verification": {
+        "date": "2026-10-25",
+        "scope": "F13 dynamic theming (config/themes + core/theme_engine.py, IR2-level style injection, both renderer backends) and dynamic layout (core/layout_engine.py post-composition geometry re-solver with catalog fallback), wired through CLI/service/API/Studio; edit path inherits the deck's recorded theme",
+        "base_commit": "working-tree (no VCS in sandbox)",
+        "working_tree_changes": true,
+        "automated_tests_passed": 27,
+        "f13_test_files": [
+          "tests/test_dynamic_theme_f13.py",
+          "tests/test_layout_engine_f13.py",
+          "tests/test_fitting_f13.py"
+        ],
+        "full_suite": "499 passed / 17 failed in sandbox; failure set byte-identical to the pre-F13 baseline run in the same environment (missing docling engine fixtures); 47/47 renderer branch tests pass with Node deps installed",
+        "rendered_verification": "3 themes x 4 slides rendered via LibreOffice and judged by vision model + pixel sampling: 12/12 PASS (exact theme backgrounds, table header/banding fills, chart palette, KPI band + chart bento, no overflow/clipping)",
+        "service_verification": "API+worker smoke: /api/config exposes 5 themes; generation accepts theme/dynamic_layout; unknown theme rejected 422",
+        "unavailable_checks": [
+          "PowerPoint COM measured text-bounds export: Windows-only; the deterministic fitting pass and render inspection stand in as the fit guarantee.",
+          "Live LLM end-to-end generation with theming: no provider key in sandbox; the service smoke transparently fails at LLM_AUTH after options flow through.",
+          "Full uploaded-document benchmark across all 25 catalog layouts."
+        ]
+      }
+    },
+    {
+      "id": "F14",
+      "slug": "native_diagrams",
+      "title": "Mermaid graph to editable PowerPoint diagrams",
+      "kind": "Feature",
+      "current_state": "Partial native shapes; missing Mermaid path",
+      "implementation_status": "NOT_STARTED",
+      "phase": 3,
+      "dependencies": [
+        "F13",
+        "R06"
+      ],
+      "workflow_points": [
+        "6",
+        "17",
+        "21",
+        "28"
+      ]
+    },
+    {
+      "id": "F15",
+      "slug": "draft_and_human_review",
+      "title": "Draft PPT, suggestions, and human review UI",
+      "kind": "Feature",
+      "current_state": "Missing",
+      "implementation_status": "NOT_STARTED",
+      "phase": 4,
+      "dependencies": [
+        "F01",
+        "F03",
+        "F11",
+        "F13",
+        "R04"
+      ],
+      "workflow_points": [
+        "23a",
+        "23b"
+      ]
+    },
+    {
+      "id": "F16",
+      "slug": "prompt_edits_and_layout_changes",
+      "title": "Prompt editing, scoped regeneration, and layout changes",
+      "kind": "Feature",
+      "current_state": "Partial CLI editing",
+      "implementation_status": "NOT_STARTED",
+      "phase": 4,
+      "dependencies": [
+        "F15",
+        "F09",
+        "R05",
+        "F13"
+      ],
+      "workflow_points": [
+        "24",
+        "28"
+      ]
+    },
+    {
+      "id": "F17",
+      "slug": "chat_and_version_history",
+      "title": "Chat-like interaction and V1/V2 history",
+      "kind": "Feature",
+      "current_state": "Missing / partial edit log",
+      "implementation_status": "NOT_STARTED",
+      "phase": 4,
+      "dependencies": [
+        "F16",
+        "R05"
+      ],
+      "workflow_points": [
+        "27"
+      ]
+    },
+    {
+      "id": "F18",
+      "slug": "pptx_pdf_export",
+      "title": "PPTX and PDF export",
+      "kind": "Feature",
+      "current_state": "PPTX partial; PDF missing",
+      "implementation_status": "NOT_STARTED",
+      "phase": 4,
+      "dependencies": [
+        "F15",
+        "R06",
+        "R04"
+      ],
+      "workflow_points": [
+        "25"
+      ]
+    },
+    {
+      "id": "F19",
+      "slug": "evaluation_and_academic_study",
+      "title": "Six core evaluation metrics and academic study",
+      "kind": "Feature / repair",
+      "current_state": "Partial / unreliable",
+      "implementation_status": "NOT_STARTED",
+      "phase": 4,
+      "dependencies": [
+        "R03",
+        "R04",
+        "F11",
+        "F13"
+      ],
+      "workflow_points": [
+        "26"
+      ]
+    },
+    {
+      "id": "F20",
+      "slug": "cross_document_conflicts",
+      "title": "Cross-document conflict detection (deferred)",
+      "kind": "Feature",
+      "current_state": "Missing / deferred",
+      "implementation_status": "NOT_STARTED",
+      "phase": 5,
+      "dependencies": [
+        "F05",
+        "F08"
+      ],
+      "workflow_points": [
+        "22"
+      ]
+    }
+  ],
+  "repository_cleanup": {
+    "date": "2026-10-09",
+    "supported_generation_pipeline": "multi-agent",
+    "intended_promotion_target": "main",
+    "branch_promoted": false,
+    "automated_tests_passed": 246,
+    "evidence": "C:\\Users\\thang\\Projects\\PPTAI\\audit-artifacts\\repository-cleanup\\verification.json",
+    "report": "REPOSITORY_CLEANUP.md",
+    "remaining_cleanup": [
+      ".pytest_cache: Windows access denied; normal ownership recovery also denied"
+    ]
+  }
+}

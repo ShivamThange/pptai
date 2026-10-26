@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PPTAI · Sources</title><link rel="stylesheet" href="upload.css"></head>
+<body><main>
+  <p class="eyebrow">PPTAI / NEW PRESENTATION</p><h1>Start with your sources.</h1>
+  <p>Upload documents, data, and images. Choose a file type when needed, then send your source set for generation.</p>
+  <label class="picker">Add files<input id="files" type="file" multiple></label>
+  <p id="limits" class="muted" aria-live="polite">Loading supported formats…</p>
+  <section id="rows" aria-label="Selected sources"></section>
+  <div class="actions"><button id="parse" disabled>Parse files</button><button id="send" class="primary" disabled>Send</button></div>
+  <p id="message" role="status"></p><section id="jobs" aria-label="Job progress" aria-live="polite"></section>
+</main><script src="upload.js" defer></script></body></html>

@@ -1,0 +1,16 @@
+{
+  "name": "Corporate Blue",
+  "description": "Boardroom blue: deep navy headers, steel accents, crisp Calibri typography.",
+  "background": "#FFFFFF",
+  "text": "#1E293B",
+  "text_muted": "#64748B",
+  "accent": "#1D4ED8",
+  "accent_soft": "#DBEAFE",
+  "connector": "#94A3B8",
+  "table_header_bg": "#1E3A8A",
+  "table_row_color": "#334155",
+  "table_band": "#EFF6FF",
+  "heading_font": "Calibri",
+  "body_font": "Calibri",
+  "chart_colors": ["#1D4ED8", "#0EA5E9", "#6366F1", "#14B8A6", "#F59E0B", "#64748B"]
+}

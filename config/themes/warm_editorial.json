@@ -1,0 +1,16 @@
+{
+  "name": "Warm Editorial",
+  "description": "Cream paper, warm gray ink, amber accents and Georgia display headlines for essay-like decks.",
+  "background": "#FDF9F3",
+  "text": "#292524",
+  "text_muted": "#78716C",
+  "accent": "#B45309",
+  "accent_soft": "#FEF3C7",
+  "connector": "#A8A29E",
+  "table_header_bg": "#44403C",
+  "table_row_color": "#44403C",
+  "table_band": "#F5EFE6",
+  "heading_font": "Georgia",
+  "body_font": "Calibri",
+  "chart_colors": ["#B45309", "#DC2626", "#059669", "#2563EB", "#7C3AED", "#D97706"]
+}

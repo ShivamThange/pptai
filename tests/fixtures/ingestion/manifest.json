@@ -1,0 +1,232 @@
+{
+  "schema_version": 1,
+  "known_text": "Attention combines values using learned weights.",
+  "baseline": {
+    "docling": "2.139.0",
+    "docling-core": "2.101.1",
+    "openpyxl": "3.1.5"
+  },
+  "limits": "These fixtures establish retained structure and known OCR samples, not general OCR accuracy.",
+  "fixtures": {
+    "ambiguous.csv": {
+      "sha256": "859d0841e678a4999c4a00f337ad75706c01c6ae755546f1d74a7856271eeb9f",
+      "size_bytes": 12,
+      "expected": {
+        "outcome": "CSV_DELIMITER_REQUIRED"
+      }
+    },
+    "bom.txt": {
+      "sha256": "caaebd45bea121cf2289df40fd96baf2ef0336afa26fcb3ea39894cfae25c51f",
+      "size_bytes": 126,
+      "expected": {
+        "encoding": "UTF-16 BOM",
+        "blocks": 1
+      }
+    },
+    "corrupt.pdf": {
+      "sha256": "3af3705f6c6b6339d2763652305ac18935482a19c4fe88b9589472d1e82ac3a7",
+      "size_bytes": 16,
+      "expected": {
+        "outcome": "CORRUPT_SOURCE"
+      }
+    },
+    "corrupt.png": {
+      "sha256": "c96b4adc5e8588e4243d099dc3cc2871c6fd3c9cb54c073660865bc4f99ea70d",
+      "size_bytes": 15,
+      "expected": {}
+    },
+    "encrypted.pdf": {
+      "sha256": "8207b09cbbdb1c5722047ab4da98e641f411a7979143f1b8ab70d81fb778ed9e",
+      "size_bytes": 1084727,
+      "expected": {
+        "outcome": "ENCRYPTED_SOURCE"
+      }
+    },
+    "headeronly.csv": {
+      "sha256": "2f2ec4311803dd943f43da0855f0ba38e147ecf1a9278b5131c841f332b7363d",
+      "size_bytes": 14,
+      "expected": {
+        "outcome": "NO_USABLE_CONTENT"
+      }
+    },
+    "invalid.txt": {
+      "sha256": "abcc49d16f6dce7533860903092cc0bfd53db3862e83219acd1337d4d45e2882",
+      "size_bytes": 12,
+      "expected": {}
+    },
+    "latin.txt": {
+      "sha256": "dafd66c0b98965e688be1fc12942c09f0350e6be0685017c3f234e97d0adc92e",
+      "size_bytes": 4,
+      "expected": {
+        "automatic_outcome": "TEXT_ENCODING_REQUIRED",
+        "explicit_encoding": "cp1252"
+      }
+    },
+    "malformed.csv": {
+      "sha256": "9690b2bffc3c15a53eb5d9dc98d9e100bdd57dec7328b943a3dede8998e8939a",
+      "size_bytes": 24,
+      "expected": {
+        "explicit_delimiter": ",",
+        "outcome": "CORRUPT_SOURCE"
+      }
+    },
+    "many.csv": {
+      "sha256": "25639e85779f017c9a5528c4f4ec99100158254b5077bddc0a950c3d9521ae6f",
+      "size_bytes": 3185,
+      "expected": {
+        "records": 206,
+        "data_rows_per_projection": [
+          200,
+          5
+        ]
+      }
+    },
+    "noheader.csv": {
+      "sha256": "9316299027fca402819979a8617396cdcb1b826e391eb6be8a2809e50db61e1b",
+      "size_bytes": 17,
+      "expected": {}
+    },
+    "ocr.jpg": {
+      "sha256": "1f9b07591bc2c245a2c5a0ab019074f2b5c550719f39f64ee82a9f273e32652d",
+      "size_bytes": 29272,
+      "expected": {
+        "pixels": [
+          1200,
+          300
+        ],
+        "known_ocr_text": "Attention combines values using learned weights."
+      }
+    },
+    "ocr.png": {
+      "sha256": "bbb517d27952dfc6558f68ffac80eaee4b6c04f3f75d5e3c9fd67cef9e2a4f41",
+      "size_bytes": 11592,
+      "expected": {
+        "pixels": [
+          1200,
+          300
+        ],
+        "known_ocr_text": "Attention combines values using learned weights."
+      }
+    },
+    "oriented.jpg": {
+      "sha256": "c7516dc8a878d7666b115bf001ad4eba2dced4b3d38230930f10d8fa124f1d94",
+      "size_bytes": 29401,
+      "expected": {
+        "pixels": [
+          300,
+          1200
+        ],
+        "exif_orientation": 6
+      }
+    },
+    "ragged.csv": {
+      "sha256": "3db1786ba8d6221a137758436519143a6ae7ce1347cbe45c8287feb79f1d0fea",
+      "size_bytes": 37,
+      "expected": {
+        "explicit_delimiter": ",",
+        "outcome": "CSV_ROW_WIDTH"
+      }
+    },
+    "records.csv": {
+      "sha256": "ae95459a4c884412a7a6caf7bdf3c223529825edc806c4f9fc90ec3d876a8fc9",
+      "size_bytes": 68,
+      "expected": {
+        "records": 3,
+        "data_rows": 2,
+        "columns": 4,
+        "duplicate_headers": true,
+        "record_2_physical_lines": [
+          2,
+          3
+        ],
+        "lexical_values": [
+          "001",
+          "1.2300",
+          "0",
+          ""
+        ]
+      }
+    },
+    "scanned.pdf": {
+      "sha256": "f785fea061295df739b16f31e3a54bd5ec79373ae8699ea2dc9cede1c95f1354",
+      "size_bytes": 1083438,
+      "expected": {
+        "pages": 1,
+        "known_ocr_text": "Attention combines values using learned weights."
+      }
+    },
+    "semicolon.csv": {
+      "sha256": "0e0d8e8940d12f852087fd583748b7b21ba9f7c82afbed2c10b8ae9d8ac83b40",
+      "size_bytes": 25,
+      "expected": {}
+    },
+    "source.docx": {
+      "sha256": "a00e2773b187c54205458b9afd8c896e1178ce2056b4f91b92889098fda83f8f",
+      "size_bytes": 46499,
+      "expected": {
+        "heading": "Attention",
+        "merged_table": true,
+        "embedded_image": true,
+        "physical_page": null
+      }
+    },
+    "source.md": {
+      "sha256": "e55c66cf33a5c5c97862ef11e3eff4998dcbe3c02342039f47961bd8a56865ee",
+      "size_bytes": 172,
+      "expected": {
+        "heading": "Attention",
+        "table": true,
+        "linked_asset": "UNRESOLVED_LINKED_ASSET"
+      }
+    },
+    "source.pdf": {
+      "sha256": "2c10778949141324bcec30d71a97d00a481bfc1bdbf9171456031057c30bb1d6",
+      "size_bytes": 1083993,
+      "expected": {
+        "pages": 1,
+        "text": "Attention combines values using learned weights.",
+        "figure": true
+      }
+    },
+    "source.xlsx": {
+      "sha256": "2410e2bd7c3b903e6029ed8338afeae023d73f57df43fcf2d0e4e6f9c318a9e7",
+      "size_bytes": 7089,
+      "expected": {
+        "worksheets": [
+          "Visible",
+          "Hidden"
+        ],
+        "hidden_sheet": "Hidden",
+        "tail_cell": "D205",
+        "merged_range": "A7:C7",
+        "formula_unknown": "B5",
+        "formula_cached_unverified": "C5",
+        "cached_result": 3,
+        "stale_dimension": "A1:A1",
+        "objects": "drawing and chart"
+      }
+    },
+    "textless.png": {
+      "sha256": "e70bcf6bc6b7aca7d69b171737cf5987a7bcff92b87924ed2786f185f36af079",
+      "size_bytes": 249,
+      "expected": {
+        "pixels": [
+          100,
+          80
+        ],
+        "raw_status": "complete",
+        "generation": "SOURCE_CONTENT_UNAVAILABLE"
+      }
+    },
+    "unicode.txt": {
+      "sha256": "55f6f822e09ec3b8a538f6aee14b85d76fe69b4e25397579cbf09e37f3151641",
+      "size_bytes": 73,
+      "expected": {
+        "blocks": 2,
+        "location_kind": "text_span",
+        "preserved_newlines": "CRLF and LF",
+        "unicode": "café α"
+      }
+    }
+  }
+}

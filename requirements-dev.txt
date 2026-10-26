@@ -1,0 +1,4 @@
+-r requirements.txt
+-r requirements-service.txt
+pytest
+httpx>=0.27,<1

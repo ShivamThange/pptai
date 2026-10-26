@@ -1,0 +1,16 @@
+{
+  "name": "Dark Tech",
+  "description": "Midnight navy canvas with sky-blue accents for product and infrastructure talks.",
+  "background": "#0F172A",
+  "text": "#E2E8F0",
+  "text_muted": "#94A3B8",
+  "accent": "#38BDF8",
+  "accent_soft": "#1E293B",
+  "connector": "#475569",
+  "table_header_bg": "#1E293B",
+  "table_row_color": "#CBD5E1",
+  "table_band": "#182235",
+  "heading_font": "Segoe UI",
+  "body_font": "Segoe UI",
+  "chart_colors": ["#38BDF8", "#A78BFA", "#34D399", "#FBBF24", "#F472B6", "#22D3EE"]
+}

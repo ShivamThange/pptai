@@ -1,0 +1,16 @@
+{
+  "name": "Minimal Mono",
+  "description": "Monochrome Swiss minimalism: near-black ink on white, gray-scale charts, no ornament.",
+  "background": "#FFFFFF",
+  "text": "#111827",
+  "text_muted": "#6B7280",
+  "accent": "#111827",
+  "accent_soft": "#F3F4F6",
+  "connector": "#9CA3AF",
+  "table_header_bg": "#111827",
+  "table_row_color": "#374151",
+  "table_band": "#F9FAFB",
+  "heading_font": null,
+  "body_font": null,
+  "chart_colors": ["#111827", "#374151", "#4B5563", "#6B7280", "#9CA3AF", "#D1D5DB"]
+}

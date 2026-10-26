@@ -1,0 +1,9 @@
+{
+  "name": "pptai-renderer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PPTAI canonical scene renderer; locked R06 compatibility baseline",
+  "dependencies": {
+    "pptxgenjs": "3.12.0"
+  }
+}
