@@ -38,7 +38,7 @@ def render_formula(expression, style, cache_root, *, context=None):
     atomic_json(directory / 'request.json', {'expression': expression, 'style': style})
     try:
         subprocess.run([sys.executable, '-B', '-m', 'core.formula_renderer', str(directory.resolve())],
-                       cwd=Path(__file__).resolve().parents[1], check=True, timeout=style.get('timeout', 20), capture_output=True)
+                       cwd=Path(__file__).resolve().parents[2], check=True, timeout=style.get('timeout', 20), capture_output=True)
     except subprocess.TimeoutExpired:
         return {'status': 'FORMULA_RENDER_TIMEOUT', 'representations': []}
     except (subprocess.CalledProcessError, OSError):

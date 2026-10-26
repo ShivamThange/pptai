@@ -246,7 +246,7 @@ def _progressive_extract(raw, caller, *, target_sections, target_source_ids, rep
     from infrastructure.llm.context_budget import ContextBudgetError
     from infrastructure.utils.artifacts import atomic_json
     from infrastructure.ingestion.context_fragments import plan_extraction_chunks, subdivide, projected_raw
-    from domain.evaluation.coverage_ledger import initialize_ledger, record_preparation, record_call_outcome, validate_context_coverage, validate_supplied_evidence
+    from infrastructure.ingestion.coverage_ledger import initialize_ledger, record_preparation, record_call_outcome, validate_context_coverage, validate_supplied_evidence
     from contracts.context_schema import ContextCallRecord, CoverageEvent
     ledger = ledger if ledger is not None else initialize_ledger(raw)
     target = Path(output_dir) if output_dir else None
@@ -472,7 +472,7 @@ def coverage_ledger(raw: RawExtraction, accepted: list[KnowledgeUnit], candidate
             expected = mentions(block_map[source_id].text)
             quoted = any(" ".join(unit.summary.casefold().split()) == " ".join(block_map[source_id].text.casefold().split()) for unit in good)
             if not quoted and fragment_ledger is not None:
-                from domain.evaluation.coverage_ledger import interval_union
+                from infrastructure.ingestion.coverage_ledger import interval_union
                 original_text = block_map[source_id].text
                 exact_spans = []
                 for event in fragment_ledger.events:
@@ -653,12 +653,12 @@ def generate_validated_ir1(
     if extraction_mode not in {"llm", "source-passages"}:
         raise ValueError("extraction_mode must be llm or source-passages")
     check(context)
-    from domain.evaluation.coverage_ledger import initialize_ledger
+    from infrastructure.ingestion.coverage_ledger import initialize_ledger
     from contracts.context_schema import CoverageEvent
     context_ledger = initialize_ledger(raw)
     target = Path(output_dir)
     target.mkdir(parents=True, exist_ok=True)
-    from domain.evaluation.coverage_ledger import verify_retained_sources
+    from infrastructure.ingestion.coverage_ledger import verify_retained_sources
     context_ledger.source_integrity = 'verified' if verify_retained_sources(target, raw) else 'unknown'
     units = source_passage_units(raw) if extraction_mode == "source-passages" else extract_knowledge_units(raw, caller, checkpoint_cache=checkpoint_cache, context=context,
         context_ledger=context_ledger, context_output_dir=target, fragment_repairs=max_section_retries)
@@ -697,7 +697,7 @@ def generate_validated_ir1(
         context_ledger.events.append(CoverageEvent(dimension='processed', refs=context_ledger.inventory,
             stage='deterministic_source_passages', unit_ids=[u.unit_id for u in accepted]))
         context_ledger.context_completeness = 'complete'
-        from domain.evaluation.coverage_ledger import validate_context_coverage
+        from infrastructure.ingestion.coverage_ledger import validate_context_coverage
         from infrastructure.ingestion.context_fragments import initial_fragments
         chunks = [part.chunk().model_copy(update={'state': 'COMPLETE'}) for part in initial_fragments(raw)]
         validate_context_coverage(raw, chunks, context_ledger)

@@ -49,7 +49,7 @@ def import_legacy_revision(*, output_dir, layouts_path, caller=None, renderer="p
         shutil.copytree(store.root / "assets", work / "assets")
     ir1 = read_validated_json(work / "ir1_validated.json", ValidatedIR1)
     raw = read_validated_json(work / "raw_extraction.json", RawExtraction)
-    from domain.evaluation.coverage_ledger import initialize_ledger
+    from infrastructure.ingestion.coverage_ledger import initialize_ledger
     legacy_context = initialize_ledger(raw)
     legacy_context.legacy_context_unknown = True
     atomic_json(work / 'context_coverage.json', legacy_context.model_dump(mode='json'))
@@ -125,7 +125,7 @@ def _edit_revision_job(*, output_dir, layouts_path, slide_index, instruction, ba
     work = store.root / ".work" / "edits" / job_id
     copy_bundle(active, work)
     if not (work / 'context_coverage.json').exists():
-        from domain.evaluation.coverage_ledger import initialize_ledger
+        from infrastructure.ingestion.coverage_ledger import initialize_ledger
         legacy = initialize_ledger(read_validated_json(work / 'raw_extraction.json', RawExtraction))
         legacy.legacy_context_unknown = True
         atomic_json(work / 'context_coverage.json', legacy.model_dump(mode='json'))

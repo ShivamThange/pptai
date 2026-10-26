@@ -34,7 +34,7 @@ REPLACEMENTS = [
     (r"from tools\.asset_inspection", "from domain.evaluation.asset_inspection"),
     (r"from tools\.asset_description", "from domain.evaluation.asset_description"),
     (r"from tools\.chart_binding", "from domain.evaluation.chart_binding"),
-    (r"from pipeline\.coverage_ledger", "from domain.evaluation.coverage_ledger"),
+    (r"from pipeline\.coverage_ledger", "from infrastructure.ingestion.coverage_ledger"),
     # --- Application ---
     (r"from pipeline\.orchestrator", "from application.pipeline.orchestrator"),
     (r"from pipeline\.service", "from application.services.deck_service"),

@@ -110,7 +110,7 @@ def _render_pptx_slides_isolated(pptx_path: str | Path, output_dir: str | Path) 
             worker_target = temporary / "render"
             shutil.copyfile(source, worker_source)
             process = subprocess.run([sys.executable, "-m", "pipeline.slide_renderer", str(worker_source), str(worker_target)],
-                                     cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True,
+                                     cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True,
                                      timeout=60, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             if process.returncode:
                 raise RuntimeError(f"Render worker exited with code {process.returncode}: {process.stderr[-1500:]}")

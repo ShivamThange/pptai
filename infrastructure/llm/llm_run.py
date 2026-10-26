@@ -51,7 +51,7 @@ def observe_llm_run(client: Any, path: str | Path, *, operation: str = "generati
         prepared = getattr(client, 'prepared_contexts', {}).get(record.preparation_hash)
         if coverage_path.exists() and prepared is not None and record.stage != 'knowledge_extraction':
             from contracts.context_schema import CoverageLedger, ContextCallRecord, ContextChunk
-            from domain.evaluation.coverage_ledger import record_preparation, record_call_outcome, validate_context_coverage
+            from infrastructure.ingestion.coverage_ledger import record_preparation, record_call_outcome, validate_context_coverage
             from contracts.raw_extraction_schema import RawExtraction
             # Usage callbacks are serialized by LLMUsageLedger's existing lock.
             ledger = CoverageLedger.model_validate_json(coverage_path.read_text(encoding='utf-8'))

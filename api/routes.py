@@ -105,6 +105,7 @@ def worker_status(request: Request):
 def effective_config(request: Request):
     """Non-secret effective provider configuration for the Studio UI."""
     from domain.rendering.theme_engine import available_themes, LENS_THEME_MAP
+    from config.settings import resolve_environment
     provider = request.app.state.provider_settings
     return {"provider": provider.provider, "model": provider.model,
             "evaluator": {"provider": provider.evaluator_provider, "model": provider.evaluator_model},
@@ -116,7 +117,7 @@ def effective_config(request: Request):
             "max_repairs_per_slide": provider.max_repairs_per_slide,
             "themes": available_themes(),
             "lens_theme_map": LENS_THEME_MAP,
-            "api_key_present": bool(os.getenv(
+            "api_key_present": bool(resolve_environment().get(
                 "OPENROUTER_API_KEY" if provider.provider == "openrouter" else "GEMINI_API_KEY"))}
 
 

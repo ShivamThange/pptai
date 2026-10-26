@@ -6,7 +6,7 @@ from infrastructure.llm.context_budget import ContextBudgetError
 from infrastructure.utils.artifacts import sha256_value
 from config.settings import get_multi_agent_settings, TaskBudget
 from infrastructure.ingestion.context_fragments import plan_extraction_chunks, initial_fragments, subdivide, combine
-from domain.evaluation.coverage_ledger import initialize_ledger, validate_context_coverage
+from infrastructure.ingestion.coverage_ledger import initialize_ledger, validate_context_coverage
 from infrastructure.ingestion.chunker import build_chunks, write_chunks
 from contracts.raw_extraction_schema import RawExtraction, SourceBlock, SourceAsset
 from contracts.ir1_schema import KnowledgeUnit, ValidatedIR1, EvidenceRef, VisualAsset
@@ -73,7 +73,7 @@ def test_overlap_has_exact_spans_and_does_not_inflate_primary():
 
 
 def test_overlap_evidence_is_supplied_and_removed_before_primary_shrinking():
-    from domain.evaluation.coverage_ledger import validate_supplied_evidence
+    from infrastructure.ingestion.coverage_ledger import validate_supplied_evidence
     from infrastructure.ingestion.context_fragments import projected_raw
     raw = raw_source('alpha beta gamma delta epsilon\n' * 30)
     policy = replace(get_multi_agent_settings({}), text_overlap_tokens=40)

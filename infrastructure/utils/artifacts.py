@@ -71,7 +71,8 @@ def artifact_lock(path: str | Path, *, blocking: bool = True):
 
 
 def dependency_fingerprint(*paths: str) -> dict[str, str]:
-    root = Path(__file__).resolve().parents[1]
+    # Callers pass repository-root-relative paths ("pipeline/...", "core/...").
+    root = Path(__file__).resolve().parents[2]
     return {path: file_hash(root / path) for path in paths}
 
 

@@ -97,7 +97,7 @@ class RevisionStore:
             path = (directory / name).resolve()
             if not path.is_relative_to(directory.resolve()) or not path.is_file() or file_hash(path) != digest:
                 raise ValueError(f"Committed revision integrity failure: {name}")
-        from domain.evaluation.coverage_ledger import validate_sidecars
+        from infrastructure.ingestion.coverage_ledger import validate_sidecars
         validate_sidecars(directory)
         return record
 

@@ -19,7 +19,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-THEMES_DIR = Path(__file__).resolve().parents[1] / "config" / "themes"
+THEMES_DIR = Path(__file__).resolve().parents[2] / "config" / "themes"
 
 _HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
 

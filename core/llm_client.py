@@ -399,7 +399,7 @@ class LLMClient:
         measurement.request_fingerprint = prepared.context.request_hash
         raw = getattr(self, 'context_source', None)
         if raw is not None:
-            from domain.evaluation.coverage_ledger import request_references
+            from infrastructure.ingestion.coverage_ledger import request_references
             prepared.context.refs = request_references(raw, contents, stage)
         if media_hashes:
             from contracts.context_schema import ContextRef

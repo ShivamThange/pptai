@@ -9,7 +9,7 @@ from infrastructure.llm.context_budget import ContextBudgetError
 from infrastructure.llm.llm_client import LLMClient, LLMBudgetError
 from infrastructure.ingestion.knowledge_extractor import generate_validated_ir1, KnowledgeUnit, KnowledgeUnitBatch, KnowledgeUnitDraft
 from infrastructure.ingestion.context_fragments import initial_fragments, subdivide
-from domain.evaluation.coverage_ledger import initialize_ledger, validate_context_coverage, validate_supplied_evidence, record_call_outcome
+from infrastructure.ingestion.coverage_ledger import initialize_ledger, validate_context_coverage, validate_supplied_evidence, record_call_outcome
 from contracts.context_schema import CoverageEvent, ContextCallRecord, CoverageLedger, ContextChunk
 from contracts.ir1_schema import EvidenceRef
 from contracts.raw_extraction_schema import RawExtraction, SourceBlock

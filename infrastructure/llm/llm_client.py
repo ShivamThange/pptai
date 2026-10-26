@@ -402,7 +402,7 @@ class LLMClient:
             # to Gemini's count_tokens endpoint. Every prepared request now
             # costs zero extra API calls; accuracy within ~10% is plenty for a
             # context-window safety margin.
-            counted = _local_token_estimate(contents, system_prompt, selected_model=selected)
+            counted = _local_token_estimate(count_payload['messages'][1]['content'], system_prompt, selected_model=selected)
             # Add schema overhead estimate (JSON schemas tokenize densely).
             counted += 500
             measurement.input_tokens = counted + media_tokens
@@ -423,7 +423,7 @@ class LLMClient:
         measurement.request_fingerprint = prepared.context.request_hash
         raw = getattr(self, 'context_source', None)
         if raw is not None:
-            from domain.evaluation.coverage_ledger import request_references
+            from infrastructure.ingestion.coverage_ledger import request_references
             prepared.context.refs = request_references(raw, contents, stage)
         if media_hashes:
             from contracts.context_schema import ContextRef
