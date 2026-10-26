@@ -20,13 +20,14 @@ from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Mapping, TypeVar
 
 from google import genai
 from google.genai import types
 from jsonschema import Draft202012Validator
 from pydantic import BaseModel, ValidationError
 
+from config.model_quotas import DAY_SECONDS, MINUTE_SECONDS, ModelQuota, declared_models, normalize_model
 from config.settings import MultiAgentSettings, ProviderCapabilities, TaskBudget, get_multi_agent_settings, get_provider_model
 from infrastructure.llm.context_budget import ContextBudgetError, PreparedRequest, resolve_stage_budget, measure_request, assert_fits
 logger = logging.getLogger(__name__)
@@ -82,38 +83,148 @@ def _wait(delay: float, *, deadline: float, clock: Callable[[], float], sleep: C
         _check_active(deadline, clock, cancel)
 
 
+class _Event:
+    """One admitted call inside a window; a token event's weight is reconciled with real usage."""
+
+    __slots__ = ("started_at", "weight")
+
+    def __init__(self, started_at: float, weight: int) -> None:
+        self.started_at, self.weight = started_at, weight
+
+
+class QuotaWindow:
+    """Rolling capacity window: at most `capacity` weight may start within any `period` seconds."""
+
+    def __init__(self, name: str, capacity: int, period: float, *, unit: str = "calls",
+                 declared: bool = False) -> None:
+        self.name, self.period = name, float(period)
+        self.capacity = max(1, capacity)
+        self.unit, self.declared = unit, declared
+        self.events: deque[_Event] = deque()
+
+    def weight(self, tokens: int) -> int:
+        return tokens if self.unit == "tokens" else 1
+
+    def _expire(self, now: float) -> None:
+        # An event leaves the window exactly `period` after it started, so a
+        # timestamp that is already `period` old no longer consumes capacity.
+        while self.events and self.events[0].started_at <= now - self.period:
+            self.events.popleft()
+
+    def admit_at(self, now: float, weight: int) -> float | None:
+        """The first instant this window alone admits `weight`, or None if it never can.
+
+        Capacity only frees as time advances, so the result is a single instant that
+        callers can compare against other windows and wait for.
+        """
+        if weight > self.capacity:
+            return None
+        self._expire(now)
+        used = sum(event.weight for event in self.events)
+        if used + weight <= self.capacity:
+            return now
+        freed, index = 0, 0
+        while freed < used + weight - self.capacity:
+            freed += self.events[index].weight
+            index += 1
+        return self.events[index - 1].started_at + self.period
+
+    def commit(self, at: float, weight: int) -> _Event:
+        event = _Event(at, weight)
+        self.events.append(event)
+        return event
+
+
+class Reservation:
+    """A call that has been admitted; its reserved tokens can be corrected from provider usage."""
+
+    def __init__(self, limiter: "RpmLimiter", entries: list[tuple[QuotaWindow, _Event]]) -> None:
+        self._limiter, self._entries = limiter, entries
+
+    def settle(self, input_tokens: int | None, output_tokens: int | None) -> None:
+        if input_tokens is None or output_tokens is None:
+            return
+        self._limiter._reconcile(self._entries, max(0, input_tokens + output_tokens))
+
+
 class RpmLimiter:
+    """Rolling request/token/day windows per model plus the process-wide caps.
+
+    One instance is shared by every client in a worker, so a budget stays global
+    across tiers while each model keeps its own declared quota windows.
+    """
+
     def __init__(self, max_calls: int, *, clock: Callable[[], float] = time.monotonic,
-                 sleep: Callable[[float], None] = time.sleep, max_tokens: int | None = None) -> None:
+                 sleep: Callable[[float], None] = time.sleep, max_tokens: int | None = None,
+                 model_quotas: Mapping[str, ModelQuota] | None = None) -> None:
         self.max_calls = max(1, max_calls)
-        self._timestamps: deque[float] = deque()
         self._lock = threading.Lock()
         self._clock, self._sleep = clock, sleep
         self.max_tokens = max_tokens
-        self._token_reservations: deque[tuple[float, int]] = deque()
+        self.model_quotas = dict(model_quotas or {})
+        self._windows: dict[str, list[QuotaWindow]] = {}
+        self.global_calls = QuotaWindow("configured RPM", self.max_calls, MINUTE_SECONDS)
+        self.global_tokens = (QuotaWindow("configured TPM", max_tokens, MINUTE_SECONDS, unit="tokens")
+                              if max_tokens is not None else None)
+        # Historical attribute names stay live views of the process-wide windows.
+        self._timestamps = self.global_calls.events
+        self._token_reservations = self.global_tokens.events if self.global_tokens is not None else deque()
 
-    def acquire(self, *, deadline: float = float("inf"), cancel: threading.Event | None = None, tokens: int = 0, reserve=None) -> None:
+    def _model_windows(self, model: str | None) -> list[QuotaWindow]:
+        key = normalize_model(model or "")
+        if key not in self._windows:
+            quota = self.model_quotas.get(key) if self.model_quotas else None
+            self._windows[key] = [] if quota is None else [
+                QuotaWindow(f"{model} RPM", quota.rpm, MINUTE_SECONDS, declared=True),
+                QuotaWindow(f"{model} TPM", quota.tpm, MINUTE_SECONDS, unit="tokens", declared=True),
+                QuotaWindow(f"{model} RPD", quota.rpd, DAY_SECONDS, declared=True)]
+        return self._windows[key]
+
+    def _active(self, model: str | None, tokens: int) -> list[QuotaWindow]:
+        windows = [self.global_calls] + ([self.global_tokens] if self.global_tokens is not None else [])
+        return windows + self._model_windows(model)
+
+    def _reconcile(self, entries: list[tuple[QuotaWindow, _Event]], actual: int) -> None:
+        with self._lock:
+            for window, event in entries:
+                if window.unit == "tokens":
+                    # Clamped so one oversized call can never wedge a window forever. A
+                    # smaller actual value only frees capacity, which waiters re-check.
+                    event.weight = min(actual, window.capacity)
+
+    def acquire(self, *, deadline: float = float("inf"), cancel: threading.Event | None = None, tokens: int = 0,
+                reserve=None, model: str | None = None) -> Reservation:
         if self.max_tokens is not None and tokens > self.max_tokens:
             raise ContextBudgetError('RUN_CONTEXT_BUDGET_EXHAUSTED')
         while True:
             _check_active(deadline, self._clock, cancel)
             with self._lock:
                 now = self._clock()
-                while self._timestamps and self._timestamps[0] <= now - 60.0:
-                    self._timestamps.popleft()
-                while self._token_reservations and self._token_reservations[0][0] <= now - 60.0:
-                    self._token_reservations.popleft()
-                token_fit = self.max_tokens is None or sum(n for _, n in self._token_reservations) + tokens <= self.max_tokens
-                if len(self._timestamps) < self.max_calls and token_fit:
+                windows = self._active(model, tokens)
+                targets = []
+                for window in windows:
+                    target = window.admit_at(now, window.weight(tokens))
+                    if target is None:
+                        raise ContextBudgetError('MODEL_QUOTA_EXCEEDED', required=tokens, available=window.capacity)
+                    targets.append((window, target))
+                blocked = [(window, target) for window, target in targets if target > now]
+                if not blocked:
                     _check_active(deadline, self._clock, cancel)
                     if reserve is not None:
                         reserve()
-                    self._timestamps.append(now)
-                    self._token_reservations.append((now, tokens))
-                    return
-                delay = min([60.0 - (now - t) for t in self._timestamps] +
-                            [60.0 - (now - t) for t, _ in self._token_reservations])
-            _wait(delay, deadline=deadline, clock=self._clock, sleep=self._sleep, cancel=cancel)
+                    entries = [(window, window.commit(now, window.weight(tokens))) for window, _ in targets]
+                    return Reservation(self, entries)
+                # Overlapping windows expire at different instants: waiting for the
+                # earliest edge would wake into a still-saturated window and spin.
+                # Every window admits monotonically, so the latest edge is the first
+                # instant at which all of them admit at once.
+                wait = max(target for _, target in blocked)
+            if wait > deadline and any(window.declared for window, _ in blocked):
+                tightest = max(blocked, key=lambda pair: pair[1])[0]
+                raise LLMRequestError(f"{tightest.name} limit of {tightest.capacity} per "
+                                      f"{tightest.period:.0f}s is exhausted; capacity clears in "
+                                      f"{int(wait - self._clock())}s", error_class="quota", retry_after=wait - now)
+            _wait(wait - now, deadline=deadline, clock=self._clock, sleep=self._sleep, cancel=cancel)
 
 
 @dataclass
@@ -292,7 +403,7 @@ class LLMClient:
             raise ValueError("max_retries (total attempts) must be positive")
         self._clock, self._sleep = clock, sleep
         self.limiter = limiter or RpmLimiter(max_calls_per_minute or self.settings.max_calls_per_minute, clock=clock, sleep=sleep,
-            max_tokens=self.settings.max_tokens_per_minute)
+            max_tokens=self.settings.max_tokens_per_minute, model_quotas=declared_models(self.provider))
         self.usage = LLMUsageLedger()
         self._transport = transport
         self._client = gemini_client
@@ -540,6 +651,7 @@ class LLMClient:
         retry_media: dict[str, str] = {}
         for attempt in range(1, min(budget.max_attempts, self.max_retries) + 1):
             started = self._clock()
+            reservation = None
             record = CallAttempt(stage, self.provider, selected_model, attempt, "FAILED", None, 0.0, estimated,
                                  budget.max_output_tokens, capabilities_version=self.capabilities.version,
                                  allow_fallbacks=self.capabilities.allow_fallbacks,
@@ -565,7 +677,8 @@ class LLMClient:
                 record.preparation_hash = prepared.context.request_hash
                 record.measurement = prepared.context.measurement.model_dump(mode='json')
                 assert_fits(prepared, prepared.context.budget, prepared.context.measurement)
-                self.limiter.acquire(deadline=deadline, cancel=cancel_event, tokens=estimated + budget.max_output_tokens,
+                reservation = self.limiter.acquire(deadline=deadline, cancel=cancel_event,
+                    tokens=estimated + budget.max_output_tokens, model=selected_model,
                     reserve=lambda: self._reserve(estimated + budget.max_output_tokens))
                 timeout = min(self.settings.request_timeout_seconds, deadline - self._clock())
                 record.transport_started = True
@@ -655,6 +768,11 @@ class LLMClient:
             else:
                 error, retry = None, False
             record.latency_seconds = self._clock() - started
+            if reservation is not None:
+                # The estimate is the worst case (full output budget); the provider's own
+                # usage is the truth, so the model's token window releases what was not spent.
+                reservation.settle(record.input_tokens, record.output_tokens)
+                reservation = None
             self.usage.append(record)
             if error is None:
                 return result

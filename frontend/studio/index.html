@@ -110,6 +110,17 @@
       </fieldset>
 
       <fieldset class="group">
+        <legend>Model</legend>
+        <label class="field">
+          <span class="field-label">Provider model</span>
+          <select id="model" title="Model used for every provider call; the Studio enforces its declared request and token quotas">
+            <option value="">Loading models…</option>
+          </select>
+        </label>
+        <p class="hint" id="model-note">limits are enforced per model before the provider is called</p>
+      </fieldset>
+
+      <fieldset class="group">
         <legend>Visuals &amp; rendering</legend>
         <label class="field">
           <span class="field-label">Theme</span>

@@ -325,6 +325,12 @@ button { font: inherit; color: inherit; }
   text-transform: lowercase; white-space: nowrap;
 }
 .job-id { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
+.job-model {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--text-secondary);
+  background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-tag);
+  padding: 1px 6px; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.job-model:empty { display: none; }
 .job-status { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; white-space: nowrap; }
 .job[data-status="completed"] .status-mark { color: var(--ok); }
 .job[data-status="completed"] .status-text { color: var(--ok); }

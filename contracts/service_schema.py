@@ -38,6 +38,7 @@ class GenerationRequest(RequestModel):
     resume: bool = False
     use_gpu: bool = False
     instruction: str = ""
+    model: str | None = None
 
     @model_validator(mode="after")
     def slide_range(self):
@@ -47,6 +48,8 @@ class GenerationRequest(RequestModel):
             from domain.rendering.theme_engine import available_themes
             if self.theme not in available_themes():
                 raise ValueError(f"Unknown theme '{self.theme}'. Available: auto, {', '.join(sorted(available_themes()))}")
+        if self.model is not None and not self.model.strip():
+            raise ValueError("model must be a model id or omitted for the provider default")
         return self
 
 
@@ -93,4 +96,9 @@ class JobRecord(BaseModel):
     finished_at: str | None
 
     def public(self):
-        return self.model_dump(exclude={"request"})
+        # The provider configuration itself is server-owned and stays hidden, but which
+        # model a job runs on is product information the Studio has to be able to show.
+        config = self.request.get("provider_config") or {}
+        return self.model_dump(exclude={"request"}) | {
+            "model": config.get("model"), "fast_model": config.get("fast_model"),
+            "evaluator_model": config.get("evaluator_model")}

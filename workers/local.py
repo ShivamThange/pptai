@@ -8,6 +8,7 @@ import threading
 from contextlib import contextmanager
 from pathlib import Path
 from config.service_settings import get_service_settings
+from config.model_quotas import declared_models
 from config.settings import get_multi_agent_settings, resolve_environment
 from infrastructure.utils.artifacts import artifact_lock, file_hash
 from application.jobs.job_context import JobContext
@@ -26,6 +27,11 @@ log = logging.getLogger(__name__)
 
 def safe_error(error, stage):
     if isinstance(error, ContextBudgetError):
+        if error.code == 'MODEL_QUOTA_EXCEEDED':
+            return {'code': error.code, 'stage': error.stage or stage,
+                    'message': 'A single call exceeds the declared tokens-per-minute quota of the selected model. '
+                               'Choose a model with more headroom, then resubmit with resume enabled.',
+                    'required': error.required, 'available': error.available}
         return {'code': error.code, 'stage': error.stage or stage,
                 'message': 'Context admission or coverage failed. Adjust the configured capacity or narrow the required scope.',
                 'required': error.required, 'available': error.available}
@@ -39,6 +45,9 @@ def safe_error(error, stage):
                     "auth": "Provider authentication failed. Check the server API key and permissions.",
                     "deadline": "Provider deadline exceeded. Adjust server budgets or resubmit with resume enabled.",
                     "transient": "Provider is temporarily unavailable. Resubmit with resume enabled.",
+                    "quota": ("The selected model hit its declared request or token quota and the window does not "
+                              "clear before this call's deadline: " + str(error) +
+                              " Pick a model with more headroom or resubmit with resume enabled."),
                     "invalid_request": "Provider rejected the request. Check the server model and capability settings.",
                     "malformed_response": "Provider returned invalid structured output after bounded retries."}
         return {"code": "LLM_" + error.error_class.upper(), "stage": error.stage or stage,
@@ -64,7 +73,8 @@ class LocalWorker:
         self.provider_settings = provider_settings or get_multi_agent_settings(env)
         self._api_keys = {provider: env.get(name, '') for provider, name in
                          [('openrouter', 'OPENROUTER_API_KEY'), ('gemini', 'GEMINI_API_KEY')]}
-        self.limiter = RpmLimiter(self.provider_settings.max_calls_per_minute, max_tokens=self.provider_settings.max_tokens_per_minute)
+        self.limiter = RpmLimiter(self.provider_settings.max_calls_per_minute, max_tokens=self.provider_settings.max_tokens_per_minute,
+                                  model_quotas=declared_models(self.provider_settings.provider, env))
         self.caller_factory = caller_factory or self._caller
 
     def _caller(self, context):
@@ -138,8 +148,10 @@ class LocalWorker:
         caller = self.caller_factory(context)
         if job.kind == "generate":
             request = GenerationRequest.model_validate({k: v for k, v in job.request.items() if k not in {"base_revision", "sources", 'provider_config'}})
+            # `model` is provider configuration, already captured in provider_config;
+            # the pipeline options know only about scopes, retries and rendering.
             options = MultiAgentOptions(layouts_path=str(self.settings.layouts_path), output_dir=deck["output_dir"],
-                                        **request.model_dump())
+                                        **request.model_dump(exclude={"model"}))
             if len(captured) > 1:
                 members = [{**s, 'parse_root': self.settings.root / 'documents' / s['document_id']} for s in captured]
                 path = service.generate_deck_from_sources(members, self.settings.root / 'documents', options,

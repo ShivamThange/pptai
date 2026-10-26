@@ -62,17 +62,69 @@ async function pollWorker() {
 
 async function loadConfig() {
   try {
+    const previous = state.config && state.config.model;
     state.config = await api('/api/config');
-    const chip = $('model-chip');
     const c = state.config;
-    let text = `${c.provider} · ${c.model} · ${c.max_calls_per_minute}/min · out ${c.max_output_tokens} tok`;
-    if (c.context_tokens) text += ` · ctx ${c.context_tokens}`;
+    const chip = $('model-chip');
+    const quota = (c.models || []).find(model => model.current);
+    let text = `${c.provider} · ${c.model}`;
+    if (quota) text += ` · ${quota.rpm}/min · ${quota.tpm === null ? 'TPM uncapped' : `${formatTokens(quota.tpm)}/min`}`;
+    if (quota && quota.rpd) text += ` · ${quota.rpd}/day`;
+    if (c.context_tokens) text += ` · ctx ${formatTokens(c.context_tokens)}`;
     chip.textContent = text;
-    chip.title = `strict coverage: ${c.strict_section_coverage ? 'on' : 'off'} · concurrency ${c.max_concurrency}`;
+    chip.title = quota && quota.declared
+      ? `declared quotas are enforced before each call · strict coverage: ${c.strict_section_coverage ? 'on' : 'off'} · concurrency ${c.max_concurrency}`
+      : `no declared quota for ${c.model}: only the configured ${c.max_calls_per_minute} calls/min cap applies`;
     chip.classList.toggle('nokey', !c.api_key_present);
     if (!c.api_key_present) chip.title += ' · API key missing';
     populateThemes();
+    populateModels();
+    if (previous && previous !== c.model) toast(`Provider default is now ${c.model}`, 'ok');
   } catch (error) { $('model-chip').textContent = 'config unavailable'; }
+}
+
+function formatTokens(value) {
+  return value >= 1000 ? `${Math.round((value / 1000) * 10) / 10}K` : `${value}`;
+}
+
+function modelQuota(model) {
+  return ((state.config || {}).models || []).find(entry => entry.model === model) || null;
+}
+
+function populateModels() {
+  const select = $('model');
+  if (!select || !state.config || !state.config.models) return;
+  const signature = JSON.stringify(state.config.models);
+  // A re-poll must not rebuild an untouched control: rebuilding closes an open dropdown.
+  if (signature === state.modelSignature) { updateModelNote(); return; }
+  state.modelSignature = signature;
+  const current = select.value || '';
+  const options = [`<option value="">Provider default — ${state.config.model}</option>`];
+  for (const model of state.config.models) {
+    const tier = model.current ? ' — provider default' : '';
+    const limits = `${model.rpm}/min · ${model.tpm === null ? 'TPM uncapped' : `${formatTokens(model.tpm)}/min`}` +
+      `${model.rpd ? ` · ${model.rpd}/day` : ''}`;
+    options.push(`<option value="${model.model}">${model.label}${tier} — ${limits}</option>`);
+  }
+  select.innerHTML = options.join('');
+  select.value = [...select.options].some(o => o.value === current) ? current : '';
+  updateModelNote();
+}
+
+function updateModelNote() {
+  const note = $('model-note');
+  if (!note || !state.config) return;
+  const chosen = $('model').value;
+  const used = chosen || state.config.model;
+  const quota = modelQuota(used);
+  if (!quota) { note.textContent = 'limits are enforced per model before the provider is called'; return; }
+  const limits = `${used} · ${quota.rpm} calls per minute, ${quota.tpm === null ? 'no' : formatTokens(quota.tpm)} tokens per minute` +
+    (quota.rpd ? `, ${quota.rpd} calls per day` : '');
+  // A chosen model pins every tier, so the server's separate fast tier only applies
+  // to the provider default.
+  const tiers = chosen ? 'every stage uses this model'
+    : state.config.fast_model && state.config.fast_model !== used ? `fast tier ${state.config.fast_model}` : '';
+  note.textContent = [limits, tiers, quota.declared ? '' : 'quota not declared, process cap only'].filter(Boolean).join(' · ');
 }
 
 function populateThemes() {
@@ -321,6 +373,7 @@ function collectGenerationPayload(overrides = {}) {
     max_repairs_per_slide: Math.max(0, +$('max_repairs_per_slide').value || 0),
     max_concurrency: Math.max(1, +$('max_concurrency').value || 2),
     theme: $('theme').value || 'auto',
+    model: ($('model') && $('model').value) || null,
     dynamic_layout: $('dynamic_layout').checked,
     deep_verification: $('deep_verification').checked,
     instruction: $('instruction').value.trim(),
@@ -385,18 +438,27 @@ function jobRow(job, kindLabel) {
   const head = el('div', 'job-head');
   const kind = el('span', 'job-kind', kindLabel || job.kind || 'job');
   const id = el('span', 'job-id', (job.id || '').slice(0, 10));
+  const model = el('span', 'job-model', '');
   const statusWrap = el('span', 'job-status');
   const actions = el('span', 'job-actions');
-  head.append(kind, id, statusWrap, actions);
+  head.append(kind, id, model, statusWrap, actions);
   const stage = el('div', 'job-stage');
   const progress = el('div', 'job-progress');
   progress.hidden = true;
   row.append(head, stage, progress);
-  return { row, head, kind, id, statusWrap, actions, stage, progress };
+  return { row, head, kind, id, model, statusWrap, actions, stage, progress };
 }
 
 function drawJob(card, job) {
   card.row.dataset.status = job.status;
+
+  /* the model this job runs on, with the quotas the worker enforces for it */
+  const quota = ((state.config || {}).models || []).find(model => model.model === job.model);
+  card.model.textContent = job.model || '';
+  card.model.title = quota
+    ? `${quota.label} — ${quota.rpm} calls/min · ${quota.tpm ?? 'unbounded'} tokens/min` +
+      `${quota.rpd ? ` · ${quota.rpd} calls/day` : ''}${quota.declared ? '' : ' · quota not declared'}`
+    : 'provider model';
 
   /* status: mark + text, never color alone */
   card.statusWrap.replaceChildren();
@@ -744,6 +806,7 @@ function wireSettings() {
   }
   $('refresh-decks').onclick = () => { refreshDecks(); toast('Deck list refreshed', 'info'); };
   $('lens').addEventListener('change', populateThemes);
+  if ($('model')) $('model').addEventListener('change', updateModelNote);
 }
 
 async function init() {
@@ -756,6 +819,8 @@ async function init() {
   }
   pollWorker();
   setInterval(pollWorker, 5000);
+  // The model chip and quota note follow the server, not just page load.
+  setInterval(loadConfig, 30000);
   refreshDecks();
   resumeInProgress();
   updateGenerateButton();

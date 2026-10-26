@@ -43,6 +43,29 @@ def submission(job):
             "sources": public_sources(job.request.get("sources", []))}
 
 
+def provider_config(request, model=None):
+    """Server-owned provider settings for one submission, optionally pinned to a chosen model.
+
+    The server still owns which models exist: a submission may only pick one it has
+    advertised, so a client cannot point the pipeline at an arbitrary model. A single
+    selection sets both tiers, keeping one deck on a model whose quotas are enforced;
+    a cheaper tier stays an environment/CLI decision.
+    """
+    from dataclasses import asdict
+    from config.model_quotas import declared_models, normalize_model
+    from config.settings import resolve_environment
+    provider = request.app.state.provider_settings
+    config = asdict(provider)
+    if not model:
+        return config
+    advertised = set(declared_models(provider.provider, resolve_environment())) | {normalize_model(provider.model)}
+    if normalize_model(model) not in advertised:
+        raise IngestionError('UNKNOWN_MODEL', f"Model '{model}' is not offered by this server.", status=422,
+                             details={'models': sorted(advertised)})
+    config['model'] = config['fast_model'] = model
+    return config
+
+
 def public_sources(sources):
     return [{key: source[key] for key in ('document_id', 'filename', 'source_sha256', 'selected_type',
         'resolved_type', 'parse_options', 'upload_ids', 'aliases') if key in source} for source in sources]
@@ -106,10 +129,23 @@ def effective_config(request: Request):
     """Non-secret effective provider configuration for the Studio UI."""
     from domain.rendering.theme_engine import available_themes, LENS_THEME_MAP
     from config.settings import resolve_environment
+    from config.model_quotas import declared_models, normalize_model
     provider = request.app.state.provider_settings
+    env = resolve_environment()
+    declared, current = declared_models(provider.provider, env), normalize_model(provider.model)
+    models = [{'model': model_id, 'label': quota.label, 'rpm': quota.rpm, 'tpm': quota.tpm, 'rpd': quota.rpd,
+               'declared': True, 'current': model_id == current} for model_id, quota in declared.items()]
+    if current not in declared:
+        # An undeclared model stays selectable; only the process-wide caps guard it.
+        models.append({'model': provider.model, 'label': provider.model, 'rpm': provider.max_calls_per_minute,
+                       'tpm': provider.max_tokens_per_minute, 'rpd': None, 'declared': False, 'current': True})
+    models.sort(key=lambda model: (not model['current'], model['label']))
     return {"provider": provider.provider, "model": provider.model,
+            "fast_model": provider.fast_model,
             "evaluator": {"provider": provider.evaluator_provider, "model": provider.evaluator_model},
+            "models": models,
             "max_calls_per_minute": provider.max_calls_per_minute,
+            "max_tokens_per_minute": provider.max_tokens_per_minute,
             "max_concurrency": provider.max_concurrency,
             "max_output_tokens": provider.capabilities.max_output_tokens,
             "context_tokens": provider.capabilities.context_tokens,
@@ -117,7 +153,7 @@ def effective_config(request: Request):
             "max_repairs_per_slide": provider.max_repairs_per_slide,
             "themes": available_themes(),
             "lens_theme_map": LENS_THEME_MAP,
-            "api_key_present": bool(resolve_environment().get(
+            "api_key_present": bool(env.get(
                 "OPENROUTER_API_KEY" if provider.provider == "openrouter" else "GEMINI_API_KEY"))}
 
 
@@ -204,10 +240,9 @@ def create_deck(options: DeckRequest, request: Request):
         raise IngestionError('SOURCE_BYTE_LIMIT', 'Selected sources exceed the configured aggregate byte limit.', details={'limit_bytes': settings.max_source_bytes})
     deck_id = new_id()
     output = request.app.state.settings.root / "decks" / deck_id
-    from dataclasses import asdict
     job = request.app.state.store.create_deck(options.document_id, output,
-        {**options.model_dump(exclude={"document_id", "sources"}),
-         'provider_config': asdict(request.app.state.provider_settings)}, deck_id=deck_id, sources=selections)
+        {**options.model_dump(exclude={"document_id", "sources", "model"}),
+         'provider_config': provider_config(request, options.model)}, deck_id=deck_id, sources=selections)
     return submission(job)
 
 
@@ -224,9 +259,9 @@ def active_base(deck):
 @router.post("/decks/{deck_id}/generate", status_code=202)
 def regenerate(deck_id: str, request: Request, options: GenerationRequest = GenerationRequest()):
     deck = resource(request, "deck", deck_id)
-    from dataclasses import asdict
-    return submission(request.app.state.store.enqueue("generate", {**options.model_dump(), 'provider_config': asdict(request.app.state.provider_settings), "base_revision": active_base(deck), "sources": request.app.state.store.deck_sources(deck_id)},
-                                                      deck_id=deck_id, document_id=deck["document_id"]))
+    return submission(request.app.state.store.enqueue("generate", {**options.model_dump(exclude={"model"}),
+            'provider_config': provider_config(request, options.model), "base_revision": active_base(deck),
+            "sources": request.app.state.store.deck_sources(deck_id)}, deck_id=deck_id, document_id=deck["document_id"]))
 
 
 @router.post("/decks/{deck_id}/slides/{slide_index}/edit", status_code=202)
@@ -239,9 +274,9 @@ def edit(deck_id: str, options: EditRequest, request: Request, slide_index: int 
     content = json.loads((path / "ppt_content.json").read_text(encoding="utf-8"))
     if slide_index > len(content["slides"]):
         raise HTTPException(422, "Slide number is outside the published deck")
-    from dataclasses import asdict
-    return submission(request.app.state.store.enqueue("edit_slide", {**options.model_dump(), 'provider_config': asdict(request.app.state.provider_settings), "slide_index": slide_index},
-                                                      deck_id=deck_id, document_id=deck["document_id"]))
+    return submission(request.app.state.store.enqueue("edit_slide", {**options.model_dump(),
+        'provider_config': provider_config(request), "slide_index": slide_index},
+        deck_id=deck_id, document_id=deck["document_id"]))
 
 
 @router.get("/jobs/{job_id}")
