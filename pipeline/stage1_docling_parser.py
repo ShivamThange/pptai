@@ -194,180 +194,211 @@ def export_docling_document(doc, source_path: str, output_dir: str) -> Dict[str,
     used_captions = set()
     blocks, assets, relationships = [], [], []
     current_section = "Root"
-    for counter, (item, level) in enumerate(doc.iterate_items(), 1):
-        block_id = f"{document_id}:block_{counter:04d}"
-        item_kind = str(getattr(item.label, "value", item.label)).lower()
-        source_id, locations = _item_locations(item, document_id)
-        text = getattr(item, "text", "").strip()
-        # Only real structural headings advance the section; running heads
-        # (page_header) and footers must not pollute section tracking.
-        if item_kind in {"title", "section_header", "chapter", "heading"} or (
-                "heading" in item_kind and item_kind not in PAGE_FURNITURE_KINDS):
-            current_section = text or "Section Header"
-        caption, caption_refs, caption_locations = "", [], []
-        caption_binding, caption_findings = "UNKNOWN", []
-        caption_item = item
-        if "picture" in item_kind and not item.captions:
-            shared = _shared_panel_caption(item, doc)
-            if shared is not None:
-                caption_item = shared
-                caption_binding = "SHARED_PANEL_GEOMETRY"
-                caption_findings.append(
-                    "Shared left/right panel caption inferred from explicit labels and same-page geometry"
-                )
-            else:
-                nearby = _same_page_caption(item, doc, used_captions)
-                if nearby is not None:
-                    caption = (nearby.text or "").strip()
-                    caption_binding = "SAME_PAGE_GEOMETRY"
-                    cap_id, cap_locations = _item_locations(nearby, document_id)
-                    caption_refs = [cap_id]
-                    caption_locations = list(cap_locations)
-                    bound_caption_refs.add(nearby.self_ref)
-                    caption_findings.append(
-                        "Caption bound to this picture by same-page overlap and proximity"
+    # A single odd Docling item must not stall the whole parse; per-item
+    # failures are recorded as non-blocking findings and extraction continues.
+    export_findings = []
+    try:
+        for counter, (item, level) in enumerate(doc.iterate_items(), 1):
+            block_id = f"{document_id}:block_{counter:04d}"
+            try:
+                item_kind = str(getattr(item.label, "value", item.label)).lower()
+                source_id, locations = _item_locations(item, document_id)
+                text = getattr(item, "text", "").strip()
+                # Only real structural headings advance the section; running heads
+                # (page_header) and footers must not pollute section tracking.
+                if item_kind in {"title", "section_header", "chapter", "heading"} or (
+                        "heading" in item_kind and item_kind not in PAGE_FURNITURE_KINDS):
+                    current_section = text or "Section Header"
+                caption, caption_refs, caption_locations = "", [], []
+                caption_binding, caption_findings = "UNKNOWN", []
+                caption_item = item
+                if "picture" in item_kind and not item.captions:
+                    shared = _shared_panel_caption(item, doc)
+                    if shared is not None:
+                        caption_item = shared
+                        caption_binding = "SHARED_PANEL_GEOMETRY"
+                        caption_findings.append(
+                            "Shared left/right panel caption inferred from explicit labels and same-page geometry"
+                        )
+                    else:
+                        nearby = _same_page_caption(item, doc, used_captions)
+                        if nearby is not None:
+                            caption = (nearby.text or "").strip()
+                            caption_binding = "SAME_PAGE_GEOMETRY"
+                            cap_id, cap_locations = _item_locations(nearby, document_id)
+                            caption_refs = [cap_id]
+                            caption_locations = list(cap_locations)
+                            bound_caption_refs.add(nearby.self_ref)
+                            caption_findings.append(
+                                "Caption bound to this picture by same-page overlap and proximity"
+                            )
+                if not caption and hasattr(caption_item, "caption_text"):
+                    caption = caption_item.caption_text(doc)
+                    if caption and caption_binding == "UNKNOWN":
+                        caption_binding = "DIRECT"
+                    for ref in caption_item.captions:
+                        cap_id, cap_locations = _item_locations(ref.resolve(doc), document_id)
+                        caption_refs.append(cap_id)
+                        caption_locations.extend(cap_locations)
+                asset = None
+                if "table" in item_kind:
+                    asset_id = f"table_{document_id}_block_{counter:04d}"
+                    df = item.export_to_dataframe(doc=doc)
+                    has_headers = bool(item.data.grid) and any(
+                        cell.column_header for cell in item.data.grid[0]
                     )
-        if not caption and hasattr(caption_item, "caption_text"):
-            caption = caption_item.caption_text(doc)
-            if caption and caption_binding == "UNKNOWN":
-                caption_binding = "DIRECT"
-            for ref in caption_item.captions:
-                cap_id, cap_locations = _item_locations(ref.resolve(doc), document_id)
-                caption_refs.append(cap_id)
-                caption_locations.extend(cap_locations)
-        asset = None
-        if "table" in item_kind:
-            asset_id = f"table_{document_id}_block_{counter:04d}"
-            df = item.export_to_dataframe(doc=doc)
-            has_headers = bool(item.data.grid) and any(
-                cell.column_header for cell in item.data.grid[0]
-            )
-            headers = [str(value) for value in df.columns] if has_headers else []
-            rows = [
-                [str(value) for value in row]
-                for row in df.itertuples(index=False, name=None)
-            ]
-            cells = []
-            for cell in item.data.table_cells:
-                cell_locations = []
-                for location in locations:
-                    location = dict(location)
-                    if cell.bbox and len(locations) == 1:
-                        location["bbox"] = [
-                            cell.bbox.l,
-                            cell.bbox.t,
-                            cell.bbox.r,
-                            cell.bbox.b,
-                        ]
-                        location["coord_origin"] = str(cell.bbox.coord_origin.value)
-                    cell_locations.append(location)
-                cells.append(
+                    headers = [str(value) for value in df.columns] if has_headers else []
+                    rows = [
+                        [str(value) for value in row]
+                        for row in df.itertuples(index=False, name=None)
+                    ]
+                    cells = []
+                    for cell in item.data.table_cells:
+                        cell_locations = []
+                        for location in locations:
+                            location = dict(location)
+                            if cell.bbox and len(locations) == 1:
+                                location["bbox"] = [
+                                    cell.bbox.l,
+                                    cell.bbox.t,
+                                    cell.bbox.r,
+                                    cell.bbox.b,
+                                ]
+                                location["coord_origin"] = str(cell.bbox.coord_origin.value)
+                            cell_locations.append(location)
+                        cells.append(
+                            {
+                                "row": cell.start_row_offset_idx,
+                                "column": cell.start_col_offset_idx,
+                                "row_span": cell.row_span,
+                                "column_span": cell.col_span,
+                                "text": cell.text,
+                                "column_header": cell.column_header,
+                                "row_header": cell.row_header,
+                                "source_refs": [source_id],
+                                "locations": cell_locations,
+                            }
+                        )
+                    data = {"headers": headers, "rows": rows, "cells": cells}
+                    json_path = assets_dir / "tables" / f"{asset_id}.json"
+                    csv_path = json_path.with_suffix(".csv")
+                    json_path.write_text(
+                        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+                    )
+                    with csv_path.open("w", encoding="utf-8", newline="") as stream:
+                        writer = csv.writer(stream)
+                        if headers:
+                            writer.writerow(headers)
+                        writer.writerows(rows)
+                    asset = {
+                        "asset_id": asset_id,
+                        "type": "table",
+                        "data": data,
+                        "file_path": str(json_path),
+                        "json_path": str(json_path),
+                        "csv_path": str(csv_path),
+                    }
+                    text = "\n".join(
+                        " | ".join(row) for row in ([headers] if headers else []) + rows
+                    )
+                elif "picture" in item_kind or "image" in item_kind or item_kind == "formula":
+                    kind = "formula" if item_kind == "formula" else "image"
+                    asset_id = f"{kind}_{document_id}_block_{counter:04d}.png"
+                    image_path = (
+                        assets_dir / ("formulas" if kind == "formula" else "images") / asset_id
+                    )
+                    image = item.get_image(doc)
+                    findings = []
+                    if image is not None:
+                        image.save(image_path)
+                    else:
+                        findings.append("Docling returned no image pixels for this source item")
+                    asset = {
+                        "asset_id": asset_id,
+                        "type": kind,
+                        "file_path": str(image_path),
+                        "width": image.width if image is not None else None,
+                        "height": image.height if image is not None else None,
+                        "availability": "AVAILABLE" if image is not None else "MISSING",
+                        "findings": findings,
+                    }
+                    text = text or caption
+                text = text.strip()
+                if text and not (item_kind in {"caption", *PAGE_FURNITURE_KINDS}
+                                 and item.self_ref in bound_caption_refs):
+                    blocks.append(
+                        {
+                            "block_id": block_id,
+                            "document_id": document_id,
+                            "source_item_id": source_id,
+                            "type": item_kind,
+                            "text": text,
+                            "section": current_section,
+                            "locations": locations,
+                            "prov": [
+                                p.model_dump(mode="json") for p in getattr(item, "prov", [])
+                            ],
+                            "content_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                        }
+                    )
+                if asset:
+                    path = Path(asset["file_path"])
+                    asset.update(
+                        {
+                            "document_id": document_id,
+                            "source_refs": [source_id],
+                            "locations": locations,
+                            "caption": caption,
+                            "caption_binding": caption_binding,
+                            "caption_refs": caption_refs,
+                            "caption_locations": caption_locations,
+                            "section": current_section,
+                            "content_sha256": (
+                                hashlib.sha256(path.read_bytes()).hexdigest()
+                                if path.is_file()
+                                else None
+                            ),
+                        }
+                    )
+                    asset.setdefault("findings", []).extend(caption_findings)
+                    if asset["type"] == "image" and not caption:
+                        asset["findings"].append(
+                            "No unambiguous caption reference supplied by Docling"
+                        )
+                    assets.append(asset)
+                    relationships.append(
+                        {
+                            "source": source_id,
+                            "relation": "BELONGS_TO_SECTION",
+                            "target": current_section,
+                        }
+                    )
+            except Exception as error:
+                # One malformed or hostile item is a recorded gap, never a
+                # whole-document rejection.
+                export_findings.append(
                     {
-                        "row": cell.start_row_offset_idx,
-                        "column": cell.start_col_offset_idx,
-                        "row_span": cell.row_span,
-                        "column_span": cell.col_span,
-                        "text": cell.text,
-                        "column_header": cell.column_header,
-                        "row_header": cell.row_header,
-                        "source_refs": [source_id],
-                        "locations": cell_locations,
+                        "code": "EXTRACTION_ITEM_SKIPPED",
+                        "severity": "warning",
+                        "message": f"Source item skipped during extraction: {error}",
+                        "document_id": document_id,
+                        "item_id": block_id,
+                        "blocks_generation": False,
                     }
                 )
-            data = {"headers": headers, "rows": rows, "cells": cells}
-            json_path = assets_dir / "tables" / f"{asset_id}.json"
-            csv_path = json_path.with_suffix(".csv")
-            json_path.write_text(
-                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            with csv_path.open("w", encoding="utf-8", newline="") as stream:
-                writer = csv.writer(stream)
-                if headers:
-                    writer.writerow(headers)
-                writer.writerows(rows)
-            asset = {
-                "asset_id": asset_id,
-                "type": "table",
-                "data": data,
-                "file_path": str(json_path),
-                "json_path": str(json_path),
-                "csv_path": str(csv_path),
+                continue
+    except Exception as error:
+        # The iterator itself died mid-document; keep everything extracted so
+        # far and let the recorded finding explain the missing tail.
+        export_findings.append(
+            {
+                "code": "EXTRACTION_INTERRUPTED",
+                "severity": "warning",
+                "message": f"Document iteration ended early; partial extraction retained: {error}",
+                "document_id": document_id,
+                "blocks_generation": False,
             }
-            text = "\n".join(
-                " | ".join(row) for row in ([headers] if headers else []) + rows
-            )
-        elif "picture" in item_kind or "image" in item_kind or item_kind == "formula":
-            kind = "formula" if item_kind == "formula" else "image"
-            asset_id = f"{kind}_{document_id}_block_{counter:04d}.png"
-            image_path = (
-                assets_dir / ("formulas" if kind == "formula" else "images") / asset_id
-            )
-            image = item.get_image(doc)
-            findings = []
-            if image is not None:
-                image.save(image_path)
-            else:
-                findings.append("Docling returned no image pixels for this source item")
-            asset = {
-                "asset_id": asset_id,
-                "type": kind,
-                "file_path": str(image_path),
-                "width": image.width if image is not None else None,
-                "height": image.height if image is not None else None,
-                "availability": "AVAILABLE" if image is not None else "MISSING",
-                "findings": findings,
-            }
-            text = text or caption
-        text = text.strip()
-        if text and not (item_kind in {"caption", *PAGE_FURNITURE_KINDS}
-                         and item.self_ref in bound_caption_refs):
-            blocks.append(
-                {
-                    "block_id": block_id,
-                    "document_id": document_id,
-                    "source_item_id": source_id,
-                    "type": item_kind,
-                    "text": text,
-                    "section": current_section,
-                    "locations": locations,
-                    "prov": [
-                        p.model_dump(mode="json") for p in getattr(item, "prov", [])
-                    ],
-                    "content_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                }
-            )
-        if asset:
-            path = Path(asset["file_path"])
-            asset.update(
-                {
-                    "document_id": document_id,
-                    "source_refs": [source_id],
-                    "locations": locations,
-                    "caption": caption,
-                    "caption_binding": caption_binding,
-                    "caption_refs": caption_refs,
-                    "caption_locations": caption_locations,
-                    "section": current_section,
-                    "content_sha256": (
-                        hashlib.sha256(path.read_bytes()).hexdigest()
-                        if path.is_file()
-                        else None
-                    ),
-                }
-            )
-            asset.setdefault("findings", []).extend(caption_findings)
-            if asset["type"] == "image" and not caption:
-                asset["findings"].append(
-                    "No unambiguous caption reference supplied by Docling"
-                )
-            assets.append(asset)
-            relationships.append(
-                {
-                    "source": source_id,
-                    "relation": "BELONGS_TO_SECTION",
-                    "target": current_section,
-                }
-            )
+        )
     structural_ir = {
         "schema_version": "2",
         "document_name": Path(source_path).name,
@@ -379,6 +410,7 @@ def export_docling_document(doc, source_path: str, output_dir: str) -> Dict[str,
         "blocks": blocks,
         "assets": assets,
         "relationships": relationships,
+        "findings": export_findings,
     }
     (Path(output_dir) / "ir.json").write_text(
         json.dumps(structural_ir, ensure_ascii=False, indent=2), encoding="utf-8"

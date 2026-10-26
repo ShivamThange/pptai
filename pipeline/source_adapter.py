@@ -6,7 +6,9 @@ import hashlib
 import json
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
+
+from pydantic import ValidationError
 
 from core.artifacts import write_validated_json, atomic_json
 from schemas.raw_extraction_schema import (
@@ -16,6 +18,11 @@ from schemas.raw_extraction_schema import (
     SourceLocation,
     TableAssetData,
 )
+
+
+# Values SourceAsset.caption_binding legitimately accepts; derived from the
+# schema so the adapter can never disagree with the model again.
+_CAPTION_BINDINGS = get_args(SourceAsset.model_fields["caption_binding"].annotation)
 
 
 def normalize_table_data(value: Any) -> dict[str, Any]:
@@ -52,13 +59,9 @@ def _resolve_file(value: str | None, base_dir: Path | None) -> Path | None:
     )
 
 
-def _locations(
+def _prov_locations(
     item: dict[str, Any], document_id: str, source_id: str
 ) -> list[SourceLocation]:
-    if item.get("locations"):
-        return [
-            SourceLocation.model_validate(location) for location in item["locations"]
-        ]
     result = []
     for prov in item.get("prov", []):
         if not isinstance(prov, dict):
@@ -88,6 +91,64 @@ def _locations(
     return result
 
 
+def _locations(
+    item: dict[str, Any], document_id: str, source_id: str
+) -> list[SourceLocation]:
+    if item.get("locations"):
+        return [
+            SourceLocation.model_validate(location) for location in item["locations"]
+        ]
+    return _prov_locations(item, document_id, source_id)
+
+
+def _safe_locations(
+    item: dict[str, Any], document_id: str, source_id: str
+) -> tuple[list[SourceLocation], int]:
+    """Validate location entries individually; one bad entry drops only itself.
+
+    Extraction output is external evidence. A single malformed location must
+    degrade to a recorded gap instead of rejecting the whole document.
+    Returns the kept locations plus how many entries were discarded.
+    """
+    entries = item.get("locations")
+    if not entries:
+        return _prov_locations(item, document_id, source_id), 0
+    kept, dropped = [], 0
+    for entry in entries:
+        try:
+            kept.append(SourceLocation.model_validate(entry))
+        except ValidationError:
+            dropped += 1
+    if not kept:
+        return _prov_locations(item, document_id, source_id), dropped
+    return kept, dropped
+
+
+def _safe_location_entries(entries: Any) -> tuple[list[SourceLocation], int]:
+    """Per-entry validation for caption_locations-shaped lists."""
+    if not isinstance(entries, list):
+        return [], 0
+    kept, dropped = [], 0
+    for entry in entries:
+        try:
+            kept.append(SourceLocation.model_validate(entry))
+        except ValidationError:
+            dropped += 1
+    return kept, dropped
+
+
+def _safe_dimension(value: Any) -> int | None:
+    """Asset dimensions are optional positive integers; anything else is unknown."""
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or value <= 0
+        or not float(value).is_integer()
+    ):
+        return None
+    return int(value)
+
+
 def adapt_structural_ir(
     structural_ir: dict[str, Any],
     *,
@@ -100,7 +161,9 @@ def adapt_structural_ir(
     artifact_hash = hashlib.sha256(
         json.dumps(structural_ir, sort_keys=True, ensure_ascii=False).encode()
     ).hexdigest()
-    document_id = structural_ir.get("document_id") or f"legacy_{artifact_hash}"
+    document_id = str(
+        structural_ir.get("document_id") or f"legacy_{artifact_hash}"
+    )
     base = Path(base_dir).resolve() if base_dir else None
 
     def scoped(value):
@@ -126,26 +189,42 @@ def adapt_structural_ir(
         if block_id in seen:
             raise ValueError(f"Duplicate source block ID: {block_id}")
         seen.add(block_id)
-        source_id = scoped(item.get("source_item_id") or item["block_id"])
-        member_id = item.get("document_id") or document_id
-        locations = _locations(item, member_id, source_id)
-        first = next((location for location in locations if location.page), None)
-        text = str(item["text"]) if version == "3" else str(item["text"]).strip()
-        blocks.append(
-            SourceBlock(
-                block_id=block_id,
-                document_id=member_id,
-                source_item_id=source_id,
-                kind=str(item.get("type") or "text"),
-                text=text,
-                section_path=section(item, member_id),
-                page=first.page if first else None,
-                bbox=first.bbox if first else None,
-                locations=locations,
-                content_sha256=item.get("content_sha256")
-                or hashlib.sha256(text.encode()).hexdigest(),
+        try:
+            source_id = scoped(item.get("source_item_id") or item["block_id"])
+            member_id = str(item.get("document_id") or document_id)
+            locations, dropped_locations = _safe_locations(item, member_id, source_id)
+            if dropped_locations:
+                findings.append(
+                    f"Block {block_id}: dropped {dropped_locations} invalid "
+                    "location entries"
+                )
+            first = next((location for location in locations if location.page), None)
+            text = str(item["text"]) if version == "3" else str(item["text"]).strip()
+            claimed_hash = item.get("content_sha256")
+            if not isinstance(claimed_hash, str):
+                claimed_hash = None
+            blocks.append(
+                SourceBlock(
+                    block_id=block_id,
+                    document_id=member_id,
+                    source_item_id=source_id,
+                    kind=str(item.get("type") or "text"),
+                    text=text,
+                    section_path=section(item, member_id),
+                    page=first.page if first else None,
+                    bbox=first.bbox if first else None,
+                    locations=locations,
+                    content_sha256=claimed_hash
+                    or hashlib.sha256(text.encode()).hexdigest(),
+                )
             )
-        )
+        except (ValidationError, ValueError, TypeError) as error:
+            # One unusable block must not stall ingestion of the whole document;
+            # the gap is recorded so QC can see what was lost.
+            findings.append(
+                f"Block {block_id} skipped: unusable block payload ({error})"
+            )
+            continue
     seen = set()
     for item in structural_ir.get("assets", []):
         kind = str(item.get("type") or "").lower().replace("diagram", "image")
@@ -155,13 +234,35 @@ def adapt_structural_ir(
         if asset_id in seen:
             raise ValueError(f"Duplicate source asset ID: {asset_id}")
         seen.add(asset_id)
-        refs = [scoped(ref) for ref in item.get("source_refs", [])]
-        member_id = item.get("document_id") or document_id
-        locations = _locations(item, member_id, refs[0]) if refs else []
-        path = _resolve_file(
-            item.get("file_path") or item.get("json_path") or item.get("csv_path"), base
+        raw_findings = item.get("findings")
+        if isinstance(raw_findings, (list, tuple)):
+            asset_findings = [str(finding) for finding in raw_findings]
+        else:
+            asset_findings = []
+            if raw_findings:
+                findings.append(
+                    f"Asset {asset_id}: malformed findings list discarded"
+                )
+        try:
+            refs = [scoped(ref) for ref in item.get("source_refs", [])]
+        except (TypeError, ValueError) as error:
+            refs = []
+            asset_findings.append(
+                f"Unusable source references replaced with none: {error}"
+            )
+        member_id = str(item.get("document_id") or document_id)
+        locations, dropped_locations = _safe_locations(
+            item, member_id, refs[0] if refs else ""
         )
-        asset_findings = list(item.get("findings", []))
+        if dropped_locations:
+            asset_findings.append(
+                f"Dropped {dropped_locations} invalid location entries"
+            )
+        raw_path = item.get("file_path") or item.get("json_path") or item.get("csv_path")
+        if raw_path and not isinstance(raw_path, (str, Path)):
+            asset_findings.append(f"Unusable asset path {raw_path!r} discarded")
+            raw_path = None
+        path = _resolve_file(raw_path, base)
         if not refs or not locations:
             asset_findings.append(
                 "Asset source provenance unavailable; re-extract before required use"
@@ -186,6 +287,11 @@ def adapt_structural_ir(
                         data = json.loads(json_path.read_text(encoding="utf-8"))
                     except Exception as error:
                         asset_findings.append(f"Chart data unavailable: {error}")
+            if data is not None and not isinstance(data, dict):
+                asset_findings.append(
+                    "Chart data is not a JSON object; discarded"
+                )
+                data = None
         exists = bool(path and path.is_file())
         if (
             strict_assets
@@ -193,35 +299,72 @@ def adapt_structural_ir(
             and not exists
             and item.get("availability") != "MISSING"
         ):
+            # Retained-evidence integrity stays fatal: a claimed asset that is
+            # absent is corruption, not a small extraction quirk.
             raise FileNotFoundError(f"Structural IR references missing asset: {path}")
         content_hash = hashlib.sha256(path.read_bytes()).hexdigest() if exists else None
         if item.get("content_sha256") and content_hash != item["content_sha256"]:
+            # Provenance hash mismatch is deliberate tamper evidence; never soft.
             raise ValueError(f"Asset hash mismatch: {asset_id}")
         first = next((location for location in locations if location.page), None)
-        assets.append(
-            SourceAsset(
-                asset_id=asset_id,
-                document_id=member_id,
-                kind=kind,
-                section_path=section(item, member_id),
-                page=first.page if first else None,
-                file_path=str(path) if path else None,
-                data=data,
-                caption=item.get("caption") or None,
-                source_refs=refs,
-                locations=locations,
-                caption_binding=item.get("caption_binding", "UNKNOWN"),
-                caption_refs=[scoped(ref) for ref in item.get("caption_refs", [])],
-                caption_locations=item.get("caption_locations", []),
-                content_sha256=content_hash,
-                width=item.get("width"),
-                height=item.get("height"),
-                availability=(
-                    "AVAILABLE" if exists and (kind != "table" or data) else "MISSING"
-                ),
-                findings=asset_findings,
+        caption = item.get("caption")
+        if caption is not None and not isinstance(caption, str):
+            asset_findings.append(f"Unusable caption payload {caption!r} discarded")
+            caption = None
+        elif isinstance(caption, str):
+            caption = caption.strip() or None
+        caption_binding = item.get("caption_binding", "UNKNOWN")
+        if caption_binding not in _CAPTION_BINDINGS:
+            asset_findings.append(
+                f"Unknown caption binding {caption_binding!r} recorded as UNKNOWN"
             )
+            caption_binding = "UNKNOWN"
+        caption_locations, dropped_caption_locations = _safe_location_entries(
+            item.get("caption_locations")
         )
+        if dropped_caption_locations:
+            asset_findings.append(
+                f"Dropped {dropped_caption_locations} invalid caption location entries"
+            )
+        try:
+            caption_refs = [scoped(ref) for ref in item.get("caption_refs", [])]
+        except (TypeError, ValueError) as error:
+            caption_refs = []
+            asset_findings.append(
+                f"Unusable caption references replaced with none: {error}"
+            )
+        try:
+            assets.append(
+                SourceAsset(
+                    asset_id=asset_id,
+                    document_id=member_id,
+                    kind=kind,
+                    section_path=section(item, member_id),
+                    page=first.page if first else None,
+                    file_path=str(path) if path else None,
+                    data=data,
+                    caption=caption,
+                    source_refs=refs,
+                    locations=locations,
+                    caption_binding=caption_binding,
+                    caption_refs=caption_refs,
+                    caption_locations=caption_locations,
+                    content_sha256=content_hash,
+                    width=_safe_dimension(item.get("width")),
+                    height=_safe_dimension(item.get("height")),
+                    availability=(
+                        "AVAILABLE" if exists and (kind != "table" or data) else "MISSING"
+                    ),
+                    findings=asset_findings,
+                )
+            )
+        except (ValidationError, ValueError, TypeError) as error:
+            # Last resort: a single unusable asset is a recorded gap, never a
+            # whole-document rejection.
+            findings.append(
+                f"Asset {asset_id} skipped: unusable asset payload ({error})"
+            )
+            continue
     return RawExtraction(
         schema_version="3" if version == "3" else "2",
         documents=structural_ir.get("documents", []),

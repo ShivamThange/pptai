@@ -97,7 +97,10 @@ class SourceAsset(BaseModel):
     source_refs: List[str] = Field(default_factory=list)
     document_id: Optional[str] = None
     locations: List[SourceLocation] = Field(default_factory=list)
-    caption_binding: Literal["DIRECT", "SHARED_PANEL_GEOMETRY", "UNKNOWN"] = "UNKNOWN"
+    # SAME_PAGE_GEOMETRY records the conservative nearby-caption inference in
+    # stage1 (_same_page_caption); the vocabulary must accept what the parser
+    # can legitimately emit or valid parses get rejected at validation time.
+    caption_binding: Literal["DIRECT", "SHARED_PANEL_GEOMETRY", "SAME_PAGE_GEOMETRY", "UNKNOWN"] = "UNKNOWN"
     caption_refs: List[str] = Field(default_factory=list)
     caption_locations: List[SourceLocation] = Field(default_factory=list)
     content_sha256: Optional[str] = None
