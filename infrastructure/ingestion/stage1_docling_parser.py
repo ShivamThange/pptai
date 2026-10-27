@@ -170,6 +170,71 @@ def _same_page_caption(item, doc, used_captions):
     return best[1]
 
 
+def _normalize_cell_spans(cells):
+    """Shrink Docling merges that overlap their own neighbours.
+
+    The table-structure model can report a merge *and* the individual cells
+    inside it (a 1x4 anchor beside separate cells at columns 3-5). Such a grid
+    is rejected downstream as TABLE_SPAN_INVALID, so conflicts are resolved
+    here: narrower cells keep their coordinates and the merge shrinks to what
+    is still free. Every cell string survives; only the bogus span is lost.
+    """
+    order = sorted(
+        range(len(cells)),
+        key=lambda i: (
+            max(1, cells[i].get("row_span", 1)) * max(1, cells[i].get("column_span", 1)),
+            cells[i]["row"],
+            cells[i]["column"],
+            i,
+        ),
+    )
+    occupied, adjustments, kept = set(), [], []
+    for index in order:
+        cell = cells[index]
+        row, column = cell["row"], cell["column"]
+        row_span = max(1, cell.get("row_span", 1))
+        column_span = max(1, cell.get("column_span", 1))
+        candidates = [(row_span, span) for span in range(column_span, 0, -1)]
+        candidates += [(span, 1) for span in range(row_span - 1, 0, -1)]
+        placed = next(
+            (
+                (height, width)
+                for height, width in candidates
+                if not occupied
+                & {
+                    (r, c)
+                    for r in range(row, row + height)
+                    for c in range(column, column + width)
+                }
+            ),
+            None,
+        )
+        if placed is None:
+            adjustments.append(
+                f"dropped duplicate cell at row {row}, column {column}; its text "
+                f"remains in the row projection"
+            )
+            continue
+        if placed != (row_span, column_span):
+            adjustments.append(
+                f"overlapping merge at row {row}, column {column} reduced from "
+                f"{row_span}x{column_span} to {placed[0]}x{placed[1]}; text preserved"
+            )
+            cell["row_span"], cell["column_span"] = placed
+        occupied.update(
+            (r, c)
+            for r in range(row, row + placed[0])
+            for c in range(column, column + placed[1])
+        )
+        kept.append(index)
+    if len(adjustments) > 3:
+        adjustments = adjustments[:3] + [f"{len(adjustments) - 3} further spans reduced or dropped"]
+    return (
+        [cells[i] for i in sorted(kept)],
+        [f"TABLE_SPANS_NORMALIZED: {text}" for text in adjustments],
+    )
+
+
 def export_docling_document(doc, source_path: str, output_dir: str) -> Dict[str, Any]:
     """Project installed Docling item APIs without losing locations or captions."""
     source_hash = hashlib.sha256(Path(source_path).read_bytes()).hexdigest()
@@ -279,6 +344,7 @@ def export_docling_document(doc, source_path: str, output_dir: str) -> Dict[str,
                                 "locations": cell_locations,
                             }
                         )
+                    cells, span_findings = _normalize_cell_spans(cells)
                     data = {"headers": headers, "rows": rows, "cells": cells}
                     json_path = assets_dir / "tables" / f"{asset_id}.json"
                     csv_path = json_path.with_suffix(".csv")
@@ -297,6 +363,7 @@ def export_docling_document(doc, source_path: str, output_dir: str) -> Dict[str,
                         "file_path": str(json_path),
                         "json_path": str(json_path),
                         "csv_path": str(csv_path),
+                        "findings": span_findings,
                     }
                     text = "\n".join(
                         " | ".join(row) for row in ([headers] if headers else []) + rows
