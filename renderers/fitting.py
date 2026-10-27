@@ -145,6 +145,11 @@ def _fit_plain_text(slide_id: str, obj: SceneObject, report: FitReport) -> None:
     """heading / text_group / shape text: scale font, then prune trailing lines."""
     if obj.kind not in {"heading", "text_group", "shape"}:
         return
+    if obj.kind == "shape" and not str(obj.content.get("text") or "").strip():
+        # Textless shapes (card backgrounds, theme chrome bars/rules) carry no
+        # measurable line; fitting them against the empty line would report a
+        # bogus overflow on deliberately thin decorative geometry.
+        return
     text = obj.content.get("text") if obj.kind != "text_group" else None
     lines = _text_lines(obj.content) if obj.kind == "text_group" else (
         text.split("\n") if isinstance(text, str) else [str(text or "")])

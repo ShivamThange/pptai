@@ -37,7 +37,7 @@ function renderTable(slide, obj, theme, pageBg) {
   const columns = headers.length || (rows[0] || []).length;
   if (!columns || !rows.length || rows.some(r => r.length !== columns)) throw new Error("Invalid table column lengths");
   const table = [];
-  if (headers.length) table.push(headers.map(v => ({text:String(v), options:{bold:true,color:"FFFFFF",fill:hexToColor(s.header_bg || "#0F172A")}})));
+  if (headers.length) table.push(headers.map(v => ({text:String(v), options:{bold:true,color:hexToColor(s.header_text || "FFFFFF"),fill:hexToColor(s.header_bg || "#0F172A")}})));
   for (let i=0;i<rows.length;i++) table.push(rows[i].map(v => ({text:String(v),options:{fill:i%2 ? hexToColor(s.band_bg || "#F8FAFC") : hexToColor(pageBackground(s))}})));
   if (obj.content.merges?.length) {
     const skipped = new Set();
@@ -91,18 +91,34 @@ async function renderScene(scene, theme, output) {
           if (!["rect","roundRect","diamond","ellipse"].includes(obj.content.shape_type || "rect")) throw new Error("Unsupported native shape");
           const shapeType=pptx.ShapeType[obj.content.shape_type || "rect"];
           const fill={color:hexToColor(s.fill || "#EFF6FF")}, line={color:hexToColor(s.line_color || "#3B82F6"),width:s.line_width || 1};
+          // Theme elevation (F13): corner radius and soft shadow are cosmetic
+          // style keys; PptxGenJS ignores values it cannot apply.
+          const extras={};
+          if ((obj.content.shape_type || "rect")==="roundRect" && s.radius_in!=null) {
+            extras.rectRadius=Math.min(0.5, Math.max(0, Number(s.radius_in) || 0));
+          }
+          if (s.shadow) {
+            extras.shadow={type:"outer",color:hexToColor(s.shadow_color || "#000000"),
+              opacity:Number(s.shadow_opacity!=null?s.shadow_opacity:0.18),
+              blur:Number(s.shadow_blur_pt!=null?s.shadow_blur_pt:10),
+              offset:Number(s.shadow_distance_pt!=null?s.shadow_distance_pt:3),
+              angle:Number(s.shadow_angle_deg!=null?s.shadow_angle_deg:90)};
+          }
           if (obj.content.text) {
-            slide.addText(obj.content.text,{...opts,shape:shapeType,valign:"mid",fill,line}); break;
+            slide.addText(obj.content.text,{...opts,...extras,shape:shapeType,valign:"mid",fill,line}); break;
           }
           // Decorative/background object: no empty addText call (PptxGenJS rejects it).
-          slide.addShape(shapeType,{...position(obj.box),objectName:obj.object_id,fill,line}); break;
+          slide.addShape(shapeType,{...position(obj.box),objectName:obj.object_id,...extras,fill,line}); break;
         }
         case "connector": {
           const from=nodes.get(obj.content.from_id), to=nodes.get(obj.content.to_id);
           if (!from || !to) throw new Error("Unknown connector endpoints");
+          const cs={...theme,...obj.style};
           const x1=from.box.x+from.box.w, y1=from.box.y+from.box.h/2, x2=to.box.x,y2=to.box.y+to.box.h/2;
           slide.addShape(pptx.ShapeType.line,{x:Math.min(x1,x2),y:Math.min(y1,y2),w:Math.abs(x2-x1),h:Math.abs(y2-y1),
-            flipH:x2<x1,flipV:y2<y1,objectName:obj.object_id,line:{color:"64748B",width:1.25}}); break;
+            flipH:x2<x1,flipV:y2<y1,objectName:obj.object_id,
+            line:{color:hexToColor(cs.line_color || theme.connector || "64748B"),
+                  width:cs.line_width || 1.25,endArrowType:"triangle"}}); break;
         }
         default: throw new Error(`Unsupported required object type: ${obj.kind}`);
       }

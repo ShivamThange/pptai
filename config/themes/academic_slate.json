@@ -1,6 +1,6 @@
 {
   "name": "Academic Slate",
-  "description": "Neutral white canvas with slate text and a restrained blue accent; the repository's classic look.",
+  "description": "Scholarly classic: white canvas, slate ink, restrained blue accent, Georgia display headings, thin underline bars, hairline footer and quiet section numerals.",
   "background": "#FFFFFF",
   "text": "#0F172A",
   "text_muted": "#64748B",
@@ -10,7 +10,36 @@
   "table_header_bg": "#0F172A",
   "table_row_color": "#334155",
   "table_band": "#F8FAFC",
-  "heading_font": null,
-  "body_font": null,
+  "heading_font": "Georgia",
+  "body_font": "Calibri",
+  "surface": "#F8FAFC",
+  "surface_raised": "#EFF6FF",
+  "table_header_text": "#FFFFFF",
+  "border": "#CBD5E1",
+  "chrome": {
+    "title_bar": true,
+    "title_bar_height_in": 0.04,
+    "title_bar_width_in": 2.2,
+    "footer": true,
+    "footer_rule": true,
+    "page_number": true,
+    "footer_font_pt": 10,
+    "cover_rail": false,
+    "cover_rail_width_in": 0.16,
+    "section_numeral": true,
+    "section_numeral_pt": 72,
+    "quote_mark": false,
+    "quote_mark_pt": 56
+  },
+  "effects": {
+    "shadow": false,
+    "shadow_color": "#0F172A",
+    "shadow_opacity": 0.14,
+    "shadow_blur_pt": 8,
+    "shadow_distance_pt": 3,
+    "shadow_angle_deg": 90,
+    "radius_in": 0.06,
+    "border_width": 0.75
+  },
   "chart_colors": ["#2563EB", "#7C3AED", "#059669", "#D97706", "#DC2626", "#0891B2"]
 }

@@ -1,6 +1,6 @@
 {
   "name": "Warm Editorial",
-  "description": "Cream paper, warm gray ink, amber accents and Georgia display headlines for essay-like decks.",
+  "description": "Magazine essay: cream paper, warm gray ink, amber accents, Georgia display headlines, wide amber underline bars, oversized section numerals and quotation marks.",
   "background": "#FDF9F3",
   "text": "#292524",
   "text_muted": "#78716C",
@@ -12,5 +12,33 @@
   "table_band": "#F5EFE6",
   "heading_font": "Georgia",
   "body_font": "Calibri",
+  "surface": "#F5EFE6",
+  "surface_raised": "#FEF3C7",
+  "border": "#A8A29E",
+  "chrome": {
+    "title_bar": true,
+    "title_bar_height_in": 0.05,
+    "title_bar_width_in": 2.6,
+    "footer": true,
+    "footer_rule": true,
+    "page_number": true,
+    "footer_font_pt": 10,
+    "cover_rail": false,
+    "cover_rail_width_in": 0.16,
+    "section_numeral": true,
+    "section_numeral_pt": 80,
+    "quote_mark": true,
+    "quote_mark_pt": 60
+  },
+  "effects": {
+    "shadow": false,
+    "shadow_color": "#292524",
+    "shadow_opacity": 0.12,
+    "shadow_blur_pt": 8,
+    "shadow_distance_pt": 3,
+    "shadow_angle_deg": 90,
+    "radius_in": 0.02,
+    "border_width": 0.5
+  },
   "chart_colors": ["#B45309", "#DC2626", "#059669", "#2563EB", "#7C3AED", "#D97706"]
 }

@@ -18,3 +18,9 @@ lockfile. `package-lock.json` locks its dependency tree; no upgrade is included.
 The isolated worker is internal; `index.js` is the public Node wrapper over the
 same validator/renderer boundary as `python -m renderers`. There is no separate
 generation pipeline, implicit renderer fallback, or model-authored code format.
+
+Local post-adaptation deltas (F13 theme elevation, recorded for provenance):
+table header text color, connector color/width/arrowhead, rounded-corner radius
+and outer shadows now read the shared theme style keys (`header_text`,
+`line_color`, `line_width`, `radius_in`, `shadow*`) exactly like the Python
+backend; unknown keys keep the original hardcoded fallbacks.

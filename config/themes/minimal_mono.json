@@ -1,6 +1,6 @@
 {
   "name": "Minimal Mono",
-  "description": "Monochrome Swiss minimalism: near-black ink on white, gray-scale charts, no ornament.",
+  "description": "Swiss brutalist grid: near-black ink on white, Arial grotesque, heavy black underline blocks, square corners, no shadows, page numbers only.",
   "background": "#FFFFFF",
   "text": "#111827",
   "text_muted": "#6B7280",
@@ -10,7 +10,36 @@
   "table_header_bg": "#111827",
   "table_row_color": "#374151",
   "table_band": "#F9FAFB",
-  "heading_font": null,
-  "body_font": null,
+  "heading_font": "Arial",
+  "body_font": "Arial",
+  "surface": "#F3F4F6",
+  "surface_raised": "#E5E7EB",
+  "table_header_text": "#FFFFFF",
+  "border": "#111827",
+  "chrome": {
+    "title_bar": true,
+    "title_bar_height_in": 0.08,
+    "title_bar_width_in": 1.0,
+    "footer": true,
+    "footer_rule": false,
+    "page_number": true,
+    "footer_font_pt": 10,
+    "cover_rail": true,
+    "cover_rail_width_in": 0.12,
+    "section_numeral": false,
+    "section_numeral_pt": 80,
+    "quote_mark": false,
+    "quote_mark_pt": 56
+  },
+  "effects": {
+    "shadow": false,
+    "shadow_color": "#111827",
+    "shadow_opacity": 0.15,
+    "shadow_blur_pt": 8,
+    "shadow_distance_pt": 3,
+    "shadow_angle_deg": 90,
+    "radius_in": 0.0,
+    "border_width": 1.25
+  },
   "chart_colors": ["#111827", "#374151", "#4B5563", "#6B7280", "#9CA3AF", "#D1D5DB"]
 }

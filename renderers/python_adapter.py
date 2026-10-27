@@ -41,6 +41,36 @@ def _add_arrowhead(shape) -> None:
     line.append(tail)
 
 
+def _add_shadow(shape, style: dict) -> None:
+    """Attach a soft outer shadow (``a:effectLst/a:outerShdw``) to a shape.
+
+    Follows the repo's raw-XML precedent (connector arrowheads, bullet
+    formatting): cosmetic elevation only, best-effort by contract so a
+    theme-shadow failure can never reject a slide.
+    """
+    try:
+        spPr = shape._element.spPr
+        for existing in spPr.findall(qn("a:effectLst")):
+            spPr.remove(existing)
+        effect = spPr.makeelement(qn("a:effectLst"), {})
+        shadow = spPr.makeelement(qn("a:outerShdw"), {
+            "blurRad": str(int(float(style.get("shadow_blur_pt", 10.0)) * 12700)),
+            "dist": str(int(float(style.get("shadow_distance_pt", 3.0)) * 12700)),
+            "dir": str(int(float(style.get("shadow_angle_deg", 90)) * 60000)),
+            "rotWithShape": "0",
+        })
+        color = spPr.makeelement(qn("a:srgbClr"), {
+            "val": str(style.get("shadow_color", "#000000")).lstrip("#").upper()})
+        alpha = spPr.makeelement(qn("a:alpha"), {
+            "val": str(int(float(style.get("shadow_opacity", 0.18)) * 100000))})
+        color.append(alpha)
+        shadow.append(color)
+        effect.append(shadow)
+        spPr.append(effect)
+    except Exception:
+        pass  # Elevation is cosmetic; never fail a build over it.
+
+
 class PythonRenderer:
     backend = "python"
 
@@ -59,6 +89,9 @@ class PythonRenderer:
             slide = deck.slides.add_slide(deck.slide_layouts[6])
             slide.background.fill.solid()
             slide.background.fill.fore_color.rgb = hex_to_rgb(scene_slide.background_color)
+            # Per-slide page background for table striping parity with the JS
+            # backend: unfilled body cells must match the slide, not implicit white.
+            primitives.page_background = scene_slide.background_color
             nodes = {o.object_id: o for o in scene_slide.objects}
             # Renderers retain scene ordering; connectors can attach after nodes exist.
             for obj in scene_slide.objects:
@@ -110,6 +143,16 @@ class PythonRenderer:
             shape.fill.solid(); shape.fill.fore_color.rgb = hex_to_rgb(style.get("fill", "#EFF6FF"))
             shape.line.color.rgb = hex_to_rgb(style.get("line_color", "#3B82F6"))
             shape.line.width = Pt(float(style.get("line_width", 1.0)))
+            # Theme elevation (F13): rounded-corner radius and soft shadow are
+            # cosmetic style keys; unsupported values degrade silently.
+            if content.get("shape_type", "rect") == "roundRect" and style.get("radius_in") is not None:
+                try:
+                    shape.adjustments[0] = min(0.5, float(style["radius_in"])
+                                                / max(0.01, min(b.w, b.h)))
+                except Exception:
+                    pass  # No adjustable geometry; keep the default corner.
+            if style.get("shadow"):
+                _add_shadow(shape, style)
             frame = shape.text_frame
             frame.auto_size = MSO_AUTO_SIZE.NONE
             frame.word_wrap = True; frame.vertical_anchor = MSO_ANCHOR.MIDDLE

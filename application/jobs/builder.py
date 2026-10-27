@@ -25,6 +25,7 @@ class PresentationBuilder:
         self.last_scene = self.last_result = None
         self.warnings = []
         self.fitting_report = {}
+        self.chrome_report: dict = {}
         self.layout_report: dict = {}
 
     def build(self, content_source, output_path=None):
@@ -57,6 +58,13 @@ class PresentationBuilder:
                 self.layout_report = {"engine": "f13-dynamic-v1", "error": f"{type(error).__name__}: {error}"}
         scene = legacy_ir2_to_scene(content, self.layouts_spec, self.asset_registry, self.asset_search_dirs,
                                      dynamic_regions=dynamic_regions)
+        # Theme chrome (F13): decorative title bars, footers, rails, numerals and
+        # quote marks as ordinary scene objects. Pure and never fatal: any
+        # per-slide failure leaves the undecorated slide untouched, and the
+        # report records exactly what was applied or skipped for debugging.
+        from domain.rendering.theme_decorations import apply_theme_decorations
+        scene, chrome_report = apply_theme_decorations(scene, self.theme)
+        self.chrome_report = chrome_report.model_dump()
         # Deterministic pre-render fitting (F13): scale fonts / prune bullets so
         # text never overflows the resolved layout regions; tables keep every row.
         scene, fit_report = fit_scene(scene)
@@ -64,5 +72,7 @@ class PresentationBuilder:
         result = get_renderer(self.backend).render(scene, self.asset_registry, theme_flat,
                                                    output_path or content.get("output_filename", "output.pptx"))
         self.last_scene, self.last_result = scene, result
+        # Chrome skips are by-design (guards), so only renderer warnings and the
+        # deterministic fitting pass feed the build warning surface.
         self.warnings = [*fit_report.warnings, *result.warnings]
         return self.warnings

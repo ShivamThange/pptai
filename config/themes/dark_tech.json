@@ -1,6 +1,6 @@
 {
   "name": "Dark Tech",
-  "description": "Midnight navy canvas with sky-blue accents for product and infrastructure talks.",
+  "description": "Midnight product keynote: navy canvas with elevation tiers, sky-blue accents, sky edge rail on cover and closing, softly lifted cards with deep shadows.",
   "background": "#0F172A",
   "text": "#E2E8F0",
   "text_muted": "#94A3B8",
@@ -12,5 +12,33 @@
   "table_band": "#182235",
   "heading_font": "Segoe UI",
   "body_font": "Segoe UI",
+  "surface": "#1E293B",
+  "surface_raised": "#24324A",
+  "border": "#2A3B55",
+  "chrome": {
+    "title_bar": true,
+    "title_bar_height_in": 0.05,
+    "title_bar_width_in": 1.2,
+    "footer": true,
+    "footer_rule": true,
+    "page_number": true,
+    "footer_font_pt": 10,
+    "cover_rail": true,
+    "cover_rail_width_in": 0.14,
+    "section_numeral": false,
+    "section_numeral_pt": 80,
+    "quote_mark": false,
+    "quote_mark_pt": 56
+  },
+  "effects": {
+    "shadow": true,
+    "shadow_color": "#020617",
+    "shadow_opacity": 0.4,
+    "shadow_blur_pt": 12,
+    "shadow_distance_pt": 5,
+    "shadow_angle_deg": 90,
+    "radius_in": 0.1,
+    "border_width": 1.0
+  },
   "chart_colors": ["#38BDF8", "#A78BFA", "#34D399", "#FBBF24", "#F472B6", "#22D3EE"]
 }

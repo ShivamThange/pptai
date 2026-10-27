@@ -69,10 +69,18 @@ Decks are themed and laid out at build time without touching factual content:
   five validated themes in `config/themes/` — `academic_slate` (the classic
   neutral look), `corporate_blue`, `warm_editorial` (cream + Georgia),
   `dark_tech` (midnight navy), `minimal_mono`. Themes carry background, text,
-  accent, table header/banding, and chart palette tokens plus optional fonts;
-  model-authored styles always win over theme tokens; unknown ids are rejected
-  before generation. The active theme is recorded in the run manifest and
-  inherited by `--edit-slide`.
+  accent, surface/border, table header/banding, and chart palette tokens plus
+  optional fonts; model-authored styles always win over theme tokens; unknown
+  ids are rejected before generation. The active theme is recorded in the run
+  manifest and inherited by `--edit-slide`. Each theme also declares validated
+  `chrome` (title underline bars, footer rule with deck title and page number,
+  cover/closing accent rails, section numerals, quote marks) and `effects`
+  (shadow recipe, corner radius, border weight) consumed by both renderer
+  backends. Chrome is a pure, never-fatal decoration pass over the resolved
+  scene: every element is anchored to existing geometry, skipped (and recorded
+  in the builder's `chrome_report`) whenever it would overlap content or leave
+  the slide, so theme data can never stall the pipeline or fail a quality gate.
+  A theme file without `chrome`/`effects` blocks renders exactly as before.
 - **Dynamic layout** (on by default, `--no-dynamic-layout` to disable): after
   composition, a measured solver re-solves each slide's region geometry from
   bounded archetypes (single, split, table-led, cards, bento variants) using

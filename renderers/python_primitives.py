@@ -341,6 +341,7 @@ class PythonPrimitives:
         # 1. Render Header Row safely
         r_offset = 0
         if headers:
+            header_text_color = style.get("header_text", "#FFFFFF")
             for c in range(n_cols):
                 htext = clean_txt(headers[c])
                 cell = table.cell(0, c)
@@ -350,7 +351,7 @@ class PythonPrimitives:
                     for run in p.runs:
                         run.font.bold = True
                         run.font.size = Pt(font_size)
-                        run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                        run.font.color.rgb = hex_to_rgb(header_text_color)
                         if style.get("font_name"):
                             run.font.name = style["font_name"]
                 cell.fill.solid()
@@ -358,6 +359,10 @@ class PythonPrimitives:
             r_offset = 1
         # 2. Render Data Rows strictly bound to (n_rows, n_cols) grid
         band_bg = style.get("band_bg", "#F8FAFC")
+        # Unbanded rows explicitly take the slide background (stashed per slide
+        # by the adapter), matching the JS backend instead of implicit white -
+        # dark themes otherwise show light stripes inside dark tables.
+        page_bg = style.get("row_bg") or getattr(self, "page_background", None) or "#FFFFFF"
         for r_idx, row in enumerate(rows):
             row_num = r_idx + r_offset
             for c in range(n_cols):
@@ -374,6 +379,9 @@ class PythonPrimitives:
                 if r_idx % 2 == 1:
                     cell.fill.solid()
                     cell.fill.fore_color.rgb = hex_to_rgb(band_bg)
+                else:
+                    cell.fill.solid()
+                    cell.fill.fore_color.rgb = hex_to_rgb(page_bg)
 
         for r, c, rs, cs in content_obj.get('merges', []):
             anchor = table.cell(r, c)

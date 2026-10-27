@@ -17,7 +17,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 THEMES_DIR = Path(__file__).resolve().parents[2] / "config" / "themes"
 
@@ -32,6 +32,58 @@ LENS_THEME_MAP = {
 }
 
 DEFAULT_BACKGROUND = "#FFFFFF"
+
+
+class ChromeSpec(BaseModel):
+    """Per-theme slide chrome switches (title bars, footer, rails, numerals).
+
+    Every switch defaults to off so a theme file without a ``chrome`` block
+    keeps the exact pre-chrome rendering behavior; validated values fail
+    loudly at load time, following the repo's theme conventions.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    title_bar: bool = False
+    title_bar_height_in: float = Field(default=0.05, gt=0.0, le=0.2)
+    title_bar_width_in: float = Field(default=1.2, gt=0.0, le=6.0)
+    footer: bool = False
+    footer_rule: bool = True
+    page_number: bool = True
+    footer_font_pt: int = Field(default=10, ge=8, le=14)
+    cover_rail: bool = False
+    cover_rail_width_in: float = Field(default=0.16, gt=0.0, le=0.5)
+    section_numeral: bool = False
+    section_numeral_pt: int = Field(default=80, ge=24, le=200)
+    quote_mark: bool = False
+    quote_mark_pt: int = Field(default=56, ge=24, le=120)
+
+
+class EffectsSpec(BaseModel):
+    """Surface effects consumed by both renderer backends.
+
+    Values are style keys (``shadow``, ``radius_in``, ``line_width``) injected
+    into themed objects; renderers treat them as cosmetic and never fail a
+    build over an unsupported value.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    shadow: bool = False
+    shadow_color: str = "#000000"
+    shadow_opacity: float = Field(default=0.18, ge=0.0, le=1.0)
+    shadow_blur_pt: float = Field(default=10.0, gt=0.0, le=40.0)
+    shadow_distance_pt: float = Field(default=3.0, gt=0.0, le=12.0)
+    shadow_angle_deg: int = Field(default=90, ge=0, le=359)
+    radius_in: float = Field(default=0.08, ge=0.0, le=0.3)
+    border_width: float = Field(default=1.0, gt=0.0, le=4.0)
+
+    @field_validator("shadow_color")
+    @classmethod
+    def _hex_color(cls, value, info):
+        if not _HEX.match(value or ""):
+            raise ValueError(f"{info.field_name} must be a #RRGGBB color, got {value!r}")
+        return value.upper()
 
 
 class ThemeSpec(BaseModel):
@@ -54,9 +106,17 @@ class ThemeSpec(BaseModel):
     heading_font: str | None = None
     body_font: str | None = None
     chart_colors: list[str] = Field(min_length=1)
+    # --- v2 tokens (all optional; empty values resolve to v1 counterparts) ---
+    surface: str = ""
+    surface_raised: str = ""
+    table_header_text: str = ""
+    border: str = ""
+    chrome: ChromeSpec = Field(default_factory=ChromeSpec)
+    effects: EffectsSpec = Field(default_factory=EffectsSpec)
 
     @field_validator("background", "text", "text_muted", "accent", "accent_soft",
                      "connector", "table_header_bg", "table_row_color", "table_band",
+                     "surface", "surface_raised", "table_header_text", "border",
                      "chart_colors")
     @classmethod
     def _hex_colors(cls, value, info):
@@ -66,11 +126,41 @@ class ThemeSpec(BaseModel):
             return item.upper()
         return [check(c) for c in value] if isinstance(value, list) else check(value)
 
+    @model_validator(mode="after")
+    def _resolve_optional_tokens(self):
+        # Optional v2 tokens fall back to their v1 counterparts so downstream
+        # consumers (token injection, decorations, renderers) can read them
+        # unconditionally without None/empty checks.
+        if not self.surface:
+            self.surface = self.accent_soft
+        if not self.surface_raised:
+            self.surface_raised = self.surface
+        if not self.border:
+            self.border = self.accent
+        if not self.table_header_text:
+            self.table_header_text = "#FFFFFF"
+        return self
+
     def flat(self) -> dict[str, Any]:
-        """Flat style dict for the renderer ``theme`` parameter (font faces)."""
+        """Flat style dict for the renderer ``theme`` parameter.
+
+        Carries the body font face, the connector fallback color and the
+        shared shadow recipe, so both backends can elevate any object whose
+        style opts in with ``shadow: true``. Extra keys are ignored by text
+        primitives, exactly like region style keys today.
+        """
         tokens: dict[str, Any] = {}
         if self.body_font:
             tokens["font_name"] = self.body_font
+        tokens["connector"] = self.connector
+        effect = self.effects
+        tokens.update({
+            "shadow_color": effect.shadow_color,
+            "shadow_opacity": effect.shadow_opacity,
+            "shadow_blur_pt": effect.shadow_blur_pt,
+            "shadow_distance_pt": effect.shadow_distance_pt,
+            "shadow_angle_deg": effect.shadow_angle_deg,
+        })
         return tokens
 
     def swatch(self) -> list[str]:
@@ -172,7 +262,7 @@ def _tokens_for(item: dict[str, Any], region_name: str, theme: ThemeSpec) -> dic
             tokens["font_name"] = theme.heading_font
     elif kind == "table":
         tokens.update({"header_bg": theme.table_header_bg, "color": theme.table_row_color,
-                       "band_bg": theme.table_band})
+                       "band_bg": theme.table_band, "header_text": theme.table_header_text})
         if theme.body_font:
             tokens["font_name"] = theme.body_font
     elif kind == "chart":
@@ -180,13 +270,21 @@ def _tokens_for(item: dict[str, Any], region_name: str, theme: ThemeSpec) -> dic
         if theme.body_font:
             tokens["font_name"] = theme.body_font
     elif kind == "diagram":
-        tokens.update({"fill": theme.accent_soft, "line_color": theme.accent})
+        tokens.update({"fill": theme.accent_soft, "line_color": theme.accent,
+                       "line_width": theme.effects.border_width})
     elif kind in {"card", "metric_card", "callout", "quote", "chips", "compare"}:
         # Predefined visual objects: surface, border and text tokens are injected
         # as style keys; the scene expander consumes them and model styles win.
-        tokens.update({"fill": theme.accent_soft, "border_color": theme.accent,
+        # metric_card/callout sit on the raised surface; effects carry the
+        # elevation recipe (shadow/radius/border weight) for both backends.
+        raised = kind in {"metric_card", "callout"}
+        tokens.update({"fill": theme.surface_raised if raised else theme.surface,
+                       "border_color": theme.border,
                        "title_color": theme.text, "body_color": theme.text,
-                       "muted_color": theme.text_muted, "accent": theme.accent})
+                       "muted_color": theme.text_muted, "accent": theme.accent,
+                       "line_width": theme.effects.border_width,
+                       "radius_in": theme.effects.radius_in,
+                       "shadow": theme.effects.shadow})
     elif kind in {"image", "formula"}:
         # Captions and alt text read the muted token after base.py expansion.
         tokens["color"] = theme.text_muted

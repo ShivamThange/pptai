@@ -1,6 +1,6 @@
 {
   "name": "Corporate Blue",
-  "description": "Boardroom blue: deep navy headers, steel accents, crisp Calibri typography.",
+  "description": "Boardroom confidence: crisp white canvas, deep blue accents, solid underline bars, accent edge rail on cover and closing, softly elevated cards.",
   "background": "#FFFFFF",
   "text": "#1E293B",
   "text_muted": "#64748B",
@@ -12,5 +12,34 @@
   "table_band": "#EFF6FF",
   "heading_font": "Calibri",
   "body_font": "Calibri",
+  "surface": "#F1F5F9",
+  "surface_raised": "#DBEAFE",
+  "table_header_text": "#FFFFFF",
+  "border": "#BFDBFE",
+  "chrome": {
+    "title_bar": true,
+    "title_bar_height_in": 0.06,
+    "title_bar_width_in": 1.4,
+    "footer": true,
+    "footer_rule": true,
+    "page_number": true,
+    "footer_font_pt": 10,
+    "cover_rail": true,
+    "cover_rail_width_in": 0.14,
+    "section_numeral": false,
+    "section_numeral_pt": 80,
+    "quote_mark": false,
+    "quote_mark_pt": 56
+  },
+  "effects": {
+    "shadow": true,
+    "shadow_color": "#1E3A8A",
+    "shadow_opacity": 0.16,
+    "shadow_blur_pt": 10,
+    "shadow_distance_pt": 3,
+    "shadow_angle_deg": 90,
+    "radius_in": 0.08,
+    "border_width": 1.0
+  },
   "chart_colors": ["#1D4ED8", "#0EA5E9", "#6366F1", "#14B8A6", "#F59E0B", "#64748B"]
 }
