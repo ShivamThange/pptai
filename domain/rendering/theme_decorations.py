@@ -264,7 +264,15 @@ def _try_numeral(slide, occupied, theme, section_no: int, width: float,
 
 def _try_quote_mark(slide, occupied, theme, width: float, height: float,
                     report: ChromeReport) -> None:
-    """Oversized opening quotation mark above an expanded quote object."""
+    """Oversized opening quotation mark over an expanded quote object.
+
+    Preferred placement floats the mark above the quote surface. The dynamic
+    layout solver tends to center single-object slides vertically, which
+    leaves no room above, so a fallback places the mark in the side margin
+    next to the quote text instead - the classic editorial pull-quote
+    treatment. Both placements are guarded; a slide where neither fits keeps
+    its undecorated quote.
+    """
     name = "quote-mark"
     try:
         anchor = next((obj for obj in slide.objects
@@ -274,28 +282,54 @@ def _try_quote_mark(slide, occupied, theme, width: float, height: float,
             return
         font_pt = theme.chrome.quote_mark_pt
         mark_h = font_pt * 1.22 / 72.0 + 0.22
-        top = anchor.box.y - mark_h - _EDGE_CLEARANCE
-        if top < _EDGE_CLEARANCE + 0.25:
-            return _skip(report, slide, name, "no room above the quote")
-        mark = Box(x=anchor.box.x + 0.02, y=top, w=1.1, h=mark_h)
+        mark_w = 1.1
+        mark = _quote_mark_above(anchor, mark_w, mark_h)
+        if mark is not None and _fits_slide(mark, width, height) and not any(
+                _intersects(mark, box) and box is not anchor.box for box in occupied):
+            _append_quote_mark(slide, mark, theme, font_pt, occupied, report)
+            return
+        # Fallback: the side margin beside the quote text, top-aligned with it.
+        mark = _quote_mark_beside(anchor, mark_w, mark_h)
+        if mark is None:
+            return _skip(report, slide, name, "no room around the quote")
         if not _fits_slide(mark, width, height):
             return _skip(report, slide, name, "would leave the slide bounds")
-        # The anchor itself is excluded: the mark floats just above its quote
-        # surface, and the clearance-based guard must not read that as a clash.
         if any(_intersects(mark, box) and box is not anchor.box for box in occupied):
             return _skip(report, slide, name, "would overlap content")
-        style = {"color": theme.accent, "font_size": font_pt, "bold": True,
-                 "align": "left"}
-        if theme.heading_font:
-            style["font_name"] = theme.heading_font
-        slide.objects.append(SceneObject(
-            object_id=f"{slide.slide_id}//decor-quote-mark", kind="text_group",
-            box=mark, content={"text": "\u201c"}, role=DISPLAY_TEXT_ROLE,
-            required=False, style=style))
-        occupied.append(mark)
-        _applied(report, slide, name)
+        _append_quote_mark(slide, mark, theme, font_pt, occupied, report)
     except Exception as error:
         _fail(report, slide, name, error)
+
+
+def _quote_mark_above(anchor, mark_w: float, mark_h: float) -> Box | None:
+    top = anchor.box.y - mark_h - _EDGE_CLEARANCE
+    if top < _EDGE_CLEARANCE + 0.25:
+        return None
+    return Box(x=anchor.box.x + 0.02, y=top, w=mark_w, h=mark_h)
+
+
+def _quote_mark_beside(anchor, mark_w: float, mark_h: float) -> Box | None:
+    """Opening mark in the margin left of the quote surface, top-aligned with it.
+
+    Single-quote slides are centered by the solver, so the side margin is
+    normally the widest free area on the slide."""
+    if anchor.box.x - mark_w - _CLEARANCE < _EDGE_CLEARANCE:
+        return None
+    return Box(x=anchor.box.x - mark_w - _CLEARANCE, y=anchor.box.y, w=mark_w, h=mark_h)
+
+
+def _append_quote_mark(slide, mark: Box, theme, font_pt: float,
+                       occupied: list, report: ChromeReport) -> None:
+    style = {"color": theme.accent, "font_size": font_pt, "bold": True,
+             "align": "left"}
+    if theme.heading_font:
+        style["font_name"] = theme.heading_font
+    slide.objects.append(SceneObject(
+        object_id=f"{slide.slide_id}//decor-quote-mark", kind="text_group",
+        box=mark, content={"text": "\u201c"}, role=DISPLAY_TEXT_ROLE,
+        required=False, style=style))
+    occupied.append(mark)
+    _applied(report, slide, "quote-mark")
 
 
 # ---------------------------------------------------------------------------

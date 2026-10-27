@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from contracts.ingestion_schema import SourceSelection, ParseOptions, SelectedType
 from contracts.asset_schema import AssetOptions
 
-JobKind = Literal["parse", "generate", "edit_slide"]
+JobKind = Literal["parse", "generate", "edit_slide", "evaluate"]
 JobStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
 TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 
@@ -76,6 +76,20 @@ class EditRequest(RequestModel):
     def nonblank(self):
         if not self.instruction.strip():
             raise ValueError("instruction must not be blank")
+        return self
+
+
+class EvaluateRequest(RequestModel):
+    """Run the full F19 evaluation metric set over one published revision."""
+
+    revision_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    ai_judging: bool = True
+    model: str | None = None
+
+    @model_validator(mode="after")
+    def nonblank_model(self):
+        if self.model is not None and not self.model.strip():
+            raise ValueError("model must be a model id or omitted for the provider default")
         return self
 
 

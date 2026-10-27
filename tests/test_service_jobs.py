@@ -96,6 +96,9 @@ def test_worker_serial_decks_shared_parser_and_singleton(queued, monkeypatch):
         assert worker.process_next()
         assert store.get(first.id).status == "completed" and store.get(second.id).status == "queued"
         assert worker.process_next()
+        # Every completed generation auto-queues one evaluation job (F19);
+        # drain them before asserting the queue is empty.
+        assert worker.process_next() and worker.process_next()
         assert not worker.process_next()
     assert store.get(second.id).status == "completed"
     assert parses[0] == parses[1] == settings.root / "documents" / "doc"
@@ -108,6 +111,13 @@ def test_worker_serial_decks_shared_parser_and_singleton(queued, monkeypatch):
         record = RevisionStore(store.deck(job.deck_id)["output_dir"]).verify(
             Path(store.deck(job.deck_id)["output_dir"]) / "revisions" / result["revision_id"])
         assert record["job_id"] == job.id
+        # The auto-queued evaluation completed and wrote its report next to the deck.
+        evaluation = [entry for entry in store.deck_jobs(job.deck_id) if entry.kind == "evaluate"]
+        assert len(evaluation) == 1 and evaluation[0].status == "completed"
+        assert evaluation[0].result["revision_id"] == result["revision_id"]
+        assert evaluation[0].result["evaluation"]["metrics"]
+        assert (Path(store.deck(job.deck_id)["output_dir"]) / "evaluation"
+                / result["revision_id"] / "report.json").is_file()
 
 
 def test_queued_cancel_executes_nothing_and_running_watcher(queued, monkeypatch):
@@ -165,10 +175,11 @@ def test_stale_generation_edit_and_cancelled_regeneration_preserve_old_revision(
         edit = store.enqueue("edit_slide", edit_request, deck_id=deck["id"], document_id="doc")
         stale_generate = store.enqueue("generate", {**initial.request, "base_revision": base}, deck_id=deck["id"], document_id="doc")
         stale_edit = store.enqueue("edit_slide", edit_request, deck_id=deck["id"], document_id="doc")
-        worker.process_next()
+        worker.process_next()  # auto-evaluation of the initial revision
+        worker.process_next()  # edit
         edited = store.get(edit.id).result["revision_id"]
-        worker.process_next()
-        worker.process_next()
+        worker.process_next()  # stale_generate
+        worker.process_next()  # stale_edit
         assert store.get(stale_generate.id).error["code"] == "STALE_REVISION"
         assert store.get(stale_edit.id).error["code"] == "STALE_REVISION"
         assert callers[-1].calls == callers[-2].calls == []

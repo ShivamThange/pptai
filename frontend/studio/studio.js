@@ -428,6 +428,7 @@ const STAGE_LABELS = {
   build: 'Rendering PPTX',
   'quality checks': 'Quality gate + visual audit',
   publication: 'Publishing revision',
+  evaluation: 'Running evaluation metrics',
 };
 
 const JOB_LABELS = { queued: 'queued', running: 'running', completed: 'completed', failed: 'failed', cancelled: 'cancelled' };
@@ -681,6 +682,7 @@ function renderDeckList() {
 
 async function openDeck(deckId) {
   state.selectedDeck = deckId;
+  saveUiState();
   renderDeckList();
   const detail = $('deck-detail');
   detail.hidden = false;
@@ -758,6 +760,11 @@ async function openDeck(deckId) {
     detail.append(el('p', 'missing-checks', `Missing checks: ${active.missing_checks.join(', ')}`));
   }
 
+  /* F19 evaluation metrics panel (auto-run after generation; re-runnable) */
+  const evalPanel = el('section', 'eval-panel');
+  detail.append(evalPanel);
+  renderEvaluationPanel(evalPanel, deckId, active.revision_id);
+
   if (active.previews && active.previews.length) {
     const grid = el('div', 'preview-grid');
     for (const preview of active.previews) {
@@ -774,6 +781,259 @@ async function openDeck(deckId) {
     detail.append(grid);
   } else {
     detail.append(el('p', 'notice', 'No rendered previews available for this revision (rendering may have been unavailable on this machine).'));
+  }
+}
+
+/* ---------------- evaluation metrics panel (F19) ---------------- */
+const METRIC_LABELS = {
+  semantic: 'Semantic', coverage: 'Coverage', faithfulness: 'Faithfulness',
+  functional: 'Functional', structure: 'Structure', visual: 'Visual',
+};
+
+function scoreBand(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return 'none';
+  const numeric = Number(value);
+  if (numeric >= 0.8) return 'ok';
+  if (numeric >= 0.6) return 'warn';
+  return 'bad';
+}
+
+function scoreRingNode(value, caption) {
+  const band = scoreBand(value);
+  const pct = value === null || value === undefined ? 0 : Math.max(0, Math.min(1, Number(value)));
+  const size = 88, radius = 36, circumference = 2 * Math.PI * radius;
+  const ring = el('div', `score-ring ${band}`);
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', caption);
+  const track = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  track.setAttribute('cx', size / 2); track.setAttribute('cy', size / 2); track.setAttribute('r', radius);
+  track.setAttribute('class', 'ring-track');
+  const fill = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  fill.setAttribute('cx', size / 2); fill.setAttribute('cy', size / 2); fill.setAttribute('r', radius);
+  fill.setAttribute('class', 'ring-fill');
+  fill.setAttribute('stroke-dasharray', `${circumference}`);
+  fill.setAttribute('stroke-dashoffset', `${circumference * (1 - pct)}`);
+  fill.setAttribute('transform', `rotate(-90 ${size / 2} ${size / 2})`);
+  svg.append(track, fill);
+  const label = el('span', 'ring-value', value === null || value === undefined ? '—' : `${Math.round(pct * 100)}`);
+  const sub = el('span', 'ring-sub', 'overall');
+  ring.append(svg, label, sub);
+  return ring;
+}
+
+function metricCard(metric) {
+  const band = scoreBand(metric.score);
+  const card = el('div', `metric-card ${band}`);
+  const head = el('div', 'metric-head');
+  head.append(el('span', 'metric-name', METRIC_LABELS[metric.name] || metric.name));
+  if (metric.status && !['COMPLETED', 'EVALUATED_PASS', 'NOT_APPLICABLE'].includes(metric.status)) {
+    head.append(el('span', 'metric-status', metric.status));
+  }
+  head.append(el('span', `metric-value ${band}`,
+    metric.score === null || metric.score === undefined ? '—' : Number(metric.score).toFixed(2)));
+  card.append(head);
+  const track = el('div', 'metric-track');
+  const fill = el('div', `metric-fill ${band}`);
+  const pct = metric.score === null || metric.score === undefined ? 0
+    : Math.max(2, Math.min(100, Math.round(Number(metric.score) * 100)));
+  fill.style.width = `${pct}%`;
+  track.append(fill);
+  card.append(track);
+  return card;
+}
+
+function countChips(title, pairs) {
+  const group = el('span', 'count-group');
+  group.append(el('span', 'count-title', title));
+  for (const [label, count, cls] of pairs) {
+    if (!count) continue;
+    group.append(el('span', `count-chip ${cls}`, `${count} ${label}`));
+  }
+  return group;
+}
+
+function renderEvaluationSummary(summary) {
+  const nodes = [];
+  const shown = summary.overall !== null && summary.overall !== undefined
+    ? summary.overall : summary.available_metrics_score;
+
+  const hero = el('div', 'eval-hero');
+  hero.append(scoreRingNode(shown, 'overall evaluation score'));
+  const heroMeta = el('div', 'eval-hero-meta');
+  const readinessCls = summary.readiness === 'BLOCKED' ? 'bad'
+    : summary.readiness === 'DRAFT_INCOMPLETE' ? 'warn' : 'ok';
+  heroMeta.append(el('span', `eval-readiness ${readinessCls}`, summary.readiness || 'UNKNOWN'));
+  const stamp = (summary.run && summary.run.timestamp)
+    ? new Date(summary.run.timestamp).toLocaleString() : '';
+  if (stamp) heroMeta.append(el('span', 'eval-stamp', stamp));
+  if ((summary.run && summary.run.ai_judging) === false) {
+    heroMeta.append(el('span', 'eval-flag', 'no AI judging'));
+  }
+  if ((summary.run && summary.run.embedding_backend) === 'tfidf_fallback') {
+    heroMeta.append(el('span', 'eval-flag', 'tf-idf fallback'));
+  }
+  if (summary.overall === null || summary.overall === undefined) {
+    heroMeta.append(el('span', 'eval-note',
+      'overall withheld — required checks incomplete; ring shows the available-metrics score'));
+  }
+  hero.append(heroMeta);
+  nodes.push(hero);
+
+  const grid = el('div', 'eval-metrics');
+  for (const metric of summary.metrics || []) grid.append(metricCard(metric));
+  nodes.push(grid);
+
+  const counts = el('div', 'eval-counts');
+  const coverage = (summary.coverage && summary.coverage.counts) || null;
+  if (coverage) {
+    counts.append(countChips('coverage', [
+      ['covered', coverage.COVERED, 'ok'],
+      ['partial', coverage.PARTIALLY_COVERED, 'warn'],
+      ['missing', coverage.MISSING, 'bad'],
+    ]));
+  }
+  const faith = summary.faithfulness || null;
+  if (faith && faith.counts) {
+    counts.append(countChips('claims', [
+      ['supported', faith.counts.SUPPORTED, 'ok'],
+      ['partial', faith.counts.PARTIALLY_SUPPORTED, 'warn'],
+      ['unsupported', faith.counts.UNSUPPORTED, 'bad'],
+      ['contradicted', faith.counts.CONTRADICTED, 'bad'],
+    ]));
+  }
+  if (summary.warning_count) {
+    counts.append(countChips('warnings', [['visual warnings', summary.warning_count, 'warn']]));
+  }
+  if (counts.childNodes.length) nodes.push(counts);
+
+  if ((summary.skipped_metrics || []).length) {
+    nodes.push(el('p', 'eval-note',
+      `Skipped metrics: ${summary.skipped_metrics.map(item => item.metric).join(', ')}`));
+  }
+  if (summary.report_url) {
+    const reportLink = el('a', 'eval-report-link', 'download full report');
+    reportLink.href = summary.report_url;
+    reportLink.setAttribute('download', '');
+    nodes.push(reportLink);
+  }
+  return nodes;
+}
+
+async function renderEvaluationPanel(panel, deckId, revisionId) {
+  panel.replaceChildren();
+  const head = el('div', 'eval-head');
+  head.append(el('h4', 'eval-title', 'Evaluation metrics'));
+  const actions = el('span', 'eval-actions');
+  head.append(actions);
+  panel.append(head);
+  const body = el('div', 'eval-body');
+  const loading = el('div', 'eval-loading');
+  loading.append(el('span', 'spinner'), el('span', undefined, 'Loading evaluation…'));
+  body.append(loading);
+  panel.append(body);
+
+  let summary = null;
+  try {
+    summary = await api(`/api/decks/${deckId}/revisions/${revisionId}/evaluation`);
+  } catch (error) {
+    if (error.status !== 404) {
+      body.replaceChildren(el('p', 'eval-error', `Could not load evaluation: ${error.message}`));
+      return;
+    }
+    /* 404 = not evaluated yet: fall through to the empty state */
+  }
+
+  const runBtn = el('button', 'eval-run');
+  runBtn.type = 'button';
+  runBtn.textContent = summary ? 'Re-run evaluation' : 'Run evaluation';
+  runBtn.title = 'Queue the full metric evaluation (semantic, coverage, faithfulness, functional, structure, visual)';
+  runBtn.onclick = () => { runBtn.disabled = true; runEvaluation(deckId, revisionId); };
+  actions.append(runBtn);
+
+  if (!summary) {
+    const empty = el('div', 'eval-empty');
+    empty.append(
+      el('span', 'eval-empty-mark', '\u25b6'),
+      el('span', undefined, 'Not evaluated yet — run the full metric set for this revision.'),
+    );
+    body.replaceChildren(empty);
+    return;
+  }
+  body.replaceChildren(...renderEvaluationSummary(summary));
+}
+
+async function runEvaluation(deckId, revisionId) {
+  try {
+    const submitted = await api(`/api/decks/${deckId}/revisions/${revisionId}/evaluate`, { method: 'POST' });
+    toast('Evaluation queued', 'ok');
+    followJob(submitted, { kindLabel: 'evaluate' });
+  } catch (error) {
+    toast(`Could not queue evaluation: ${error.message}`);
+    const panel = document.querySelector('.eval-panel');
+    if (panel) renderEvaluationPanel(panel, deckId, revisionId);
+  }
+}
+
+/* ---------------- UI state persistence (survives reload) ---------------- */
+const STORAGE_KEY = 'pptai.studio.v1';
+const PERSISTED_FIELDS = ['lens', 'instruction', 'extraction_mode', 'asset_understanding',
+  'model', 'theme', 'polish', 'renderer', 'min_slides', 'max_slides',
+  'max_repairs_per_slide', 'max_concurrency'];
+const PERSISTED_CHECKS = ['dynamic_layout', 'deep_verification', 'resume_cache'];
+
+function saveUiState() {
+  try {
+    const form = {};
+    for (const id of PERSISTED_FIELDS) {
+      const node = $(id);
+      if (node) form[id] = node.value;
+    }
+    for (const id of PERSISTED_CHECKS) {
+      const node = $(id);
+      if (node) form[id] = node.checked;
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ form, lastDeck: state.selectedDeck }));
+  } catch { /* storage unavailable (private mode / quota) — persistence is best-effort */ }
+}
+
+function restoreUiState() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { saved = null; }
+  if (!saved || !saved.form) return saved || null;
+  // Static-option fields restore immediately; theme/model wait for loadConfig().
+  for (const id of PERSISTED_FIELDS) {
+    if (id === 'theme' || id === 'model') continue;
+    const node = $(id);
+    if (node && saved.form[id] !== undefined && saved.form[id] !== null) node.value = saved.form[id];
+  }
+  for (const id of PERSISTED_CHECKS) {
+    const node = $(id);
+    if (node && typeof saved.form[id] === 'boolean') node.checked = saved.form[id];
+  }
+  return saved;
+}
+
+function restoreDynamicChoices(saved) {
+  if (!saved || !saved.form) return;
+  for (const id of ['theme', 'model']) {
+    const node = $(id);
+    const value = saved.form[id];
+    if (node && value) {
+      node.value = value;
+      if (node.value !== value) node.value = id === 'theme' ? 'auto' : '';
+    }
+  }
+  if (typeof updateModelNote === 'function') updateModelNote();
+}
+
+function wirePersistence() {
+  for (const id of [...PERSISTED_FIELDS, ...PERSISTED_CHECKS]) {
+    const node = $(id);
+    if (!node) continue;
+    node.addEventListener('change', saveUiState);
+    if (node.tagName === 'TEXTAREA') node.addEventListener('input', saveUiState);
   }
 }
 
@@ -812,16 +1072,25 @@ function wireSettings() {
 async function init() {
   wireUpload();
   wireSettings();
+  const saved = restoreUiState();
+  wirePersistence();
   try {
     await Promise.all([loadConfig(), loadFormats()]);
   } catch (error) {
     toast(`Could not load server configuration: ${error.message}`);
   }
+  // Theme/model options exist only after loadConfig populated them.
+  restoreDynamicChoices(saved);
   pollWorker();
   setInterval(pollWorker, 5000);
   // The model chip and quota note follow the server, not just page load.
   setInterval(loadConfig, 30000);
-  refreshDecks();
+  refreshDecks().then(() => {
+    // Re-open the deck the user was viewing before the reload, if it still exists.
+    if (saved && saved.lastDeck && state.decks.some(deck => deck.id === saved.lastDeck)) {
+      openDeck(saved.lastDeck);
+    }
+  });
   resumeInProgress();
   updateGenerateButton();
   updateStages();

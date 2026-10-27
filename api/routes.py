@@ -14,7 +14,7 @@ from contracts.ingestion_schema import UploadSpec, SourceSelection, IngestionErr
 from infrastructure.ingestion.detection import detect, EXTENSIONS
 from infrastructure.persistence.revisions import RevisionStore, StaleRevisionError
 from infrastructure.utils.service_artifacts import published_ancestry, published_revision, revision_view, parsing_summary
-from contracts.service_schema import DeckRequest, EditRequest, GenerationRequest, ParseRequest, TERMINAL_STATUSES
+from contracts.service_schema import DeckRequest, EditRequest, EvaluateRequest, GenerationRequest, ParseRequest, TERMINAL_STATUSES
 
 router = APIRouter()
 SUPPORTED_EXTENSIONS = set(EXTENSIONS)
@@ -356,6 +356,49 @@ def revisions(deck_id: str, request: Request):
 @router.get("/decks/{deck_id}/revisions/{revision_id}")
 def revision(deck_id: str, revision_id: str, request: Request):
     return revision_view(deck_id, *pinned(request, deck_id, revision_id))
+
+
+@router.post("/decks/{deck_id}/revisions/{revision_id}/evaluate", status_code=202)
+def evaluate_revision(deck_id: str, revision_id: str, request: Request, options: EvaluateRequest | None = None):
+    """Queue the full F19 evaluation metric set over a published revision.
+
+    The URL pins the revision; an optional JSON body may carry
+    ``{"ai_judging": false}`` to skip LLM faithfulness judging.
+    """
+    deck = resource(request, "deck", deck_id)
+    pinned(request, deck_id, revision_id)  # Only published revisions can be evaluated.
+    if options is not None and options.revision_id != revision_id:
+        raise HTTPException(422, "Body revision_id must match the URL revision")
+    payload = {"revision_id": revision_id,
+               "ai_judging": options.ai_judging if options is not None else True}
+    return submission(request.app.state.store.enqueue("evaluate",
+        {**payload, 'provider_config': provider_config(request, options.model if options else None)},
+        deck_id=deck_id, document_id=deck["document_id"]))
+
+
+@router.get("/decks/{deck_id}/revisions/{revision_id}/evaluation")
+def evaluation(deck_id: str, revision_id: str, request: Request):
+    """Stored evaluation summary for one revision (404 body explains when absent)."""
+    from application.services.evaluation_service import evaluation_summary, load_evaluation_report
+    deck = resource(request, "deck", deck_id)
+    report = load_evaluation_report(deck["output_dir"], revision_id)
+    if report is None:
+        raise HTTPException(404, {"code": "NOT_EVALUATED",
+            "message": "This revision has no stored evaluation report yet; POST to the evaluate endpoint to run one."})
+    return evaluation_summary(report, deck_id, revision_id)
+
+
+@router.get("/decks/{deck_id}/revisions/{revision_id}/evaluation/report")
+def evaluation_report(deck_id: str, revision_id: str, request: Request):
+    """Full evaluation report JSON (concepts, claims, per-slide rows)."""
+    from application.services.evaluation_service import evaluation_report_path
+    deck = resource(request, "deck", deck_id)
+    path = evaluation_report_path(deck["output_dir"], revision_id)
+    if not path.is_file():
+        raise HTTPException(404, {"code": "NOT_EVALUATED",
+            "message": "This revision has no stored evaluation report yet; POST to the evaluate endpoint to run one."})
+    return FileResponse(path, media_type="application/json",
+                        filename=f"{deck_id}-{revision_id}-evaluation.json")
 
 
 def artifact_headers(record):

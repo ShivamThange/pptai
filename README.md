@@ -25,9 +25,19 @@ worker liveness and the effective model; jobs stream progress over SSE; each
 finished deck shows rendered slide previews, quality-check pills, and a
 `.pptx` download. A minimal legacy uploader remains at `/upload/`.
 
+Every finished generation automatically queues an **evaluation job** (the
+F19 six-metric set: semantic, coverage, faithfulness, functional, structure,
+visual). The deck view shows the results in an Evaluation Metrics panel — an
+overall score ring, color-coded metric cards, coverage/claim counts and a
+full-report download — with a **Re-run evaluation** button for any published
+revision. Keyless environments skip LLM faithfulness judging automatically
+and still produce the five deterministic metrics.
+
 The worker writes a heartbeat the UI reads, so an offline or stale worker is
 visible before you submit anything. Jobs survive page reloads: the Studio
-re-attaches to any queued/running jobs on load.
+re-attaches to any queued/running jobs on load. Your configuration and the
+deck you were viewing persist across reloads (localStorage), and previously
+generated decks are always re-listed from the server's SQLite store.
 
 ## Setup
 
@@ -309,6 +319,24 @@ optional LLM judging. Evaluator provider/model can be configured separately.
 
 For existing decks, use `python -m evalute.cli --help` to prepare references,
 evaluate, and compare runs without regenerating the deck.
+
+### Evaluation in the service (automatic + on demand)
+
+The Studio worker runs the same evaluation automatically: every completed
+generation queues an `evaluate` job over the published revision (AI judging
+only when the worker holds an evaluator API key). Reports are stored per
+revision at `<service-root>/decks/<deck_id>/evaluation/<revision_id>/` and
+served to the UI:
+
+- `GET  /api/decks/{deck}/revisions/{revision}/evaluation` — UI summary
+  (scores, statuses, counts, warnings)
+- `GET  /api/decks/{deck}/revisions/{revision}/evaluation/report` — full report JSON
+- `POST /api/decks/{deck}/revisions/{revision}/evaluate` — queue a (re-)run;
+  optional body `{"ai_judging": false}`
+
+The reference inputs are rebuilt from the revision bundle itself
+(`raw_extraction.json` + `content_analysis.json`), so any published revision
+can be re-evaluated at any time without regenerating the deck.
 
 ## Verification and generated files
 

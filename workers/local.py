@@ -19,7 +19,8 @@ from infrastructure.persistence.revisions import StaleRevisionError, RevisionSto
 from infrastructure.utils.service_artifacts import revision_view, parsing_summary
 from pipeline import service
 from application.pipeline.orchestrator import MultiAgentOptions
-from contracts.service_schema import GenerationRequest, ParseRequest, EditRequest
+from application.services.evaluation_service import run_revision_evaluation
+from contracts.service_schema import GenerationRequest, ParseRequest, EditRequest, EvaluateRequest
 from contracts.ingestion_schema import IngestionError
 
 log = logging.getLogger(__name__)
@@ -103,6 +104,8 @@ class LocalWorker:
                 **request.model_dump(), context=context, caller=self.caller_factory(context))
             record = RevisionStore(deck['output_dir']).verify(path.parent)
             return {'deck_id': deck['id'], **revision_view(deck['id'], path.parent, record)}
+        if job.kind == 'evaluate':
+            return self._evaluate(job, context)
         document = self.store.document(job.document_id)
         if document is None:
             raise ValueError("Job source no longer exists")
@@ -177,7 +180,63 @@ class LocalWorker:
                     raise
         # Use the returned revision, even when cancellation arrived during commit.
         record = RevisionStore(deck["output_dir"]).verify(path.parent)
-        return {"deck_id": deck["id"], **revision_view(deck["id"], path.parent, record)}
+        result = {"deck_id": deck["id"], **revision_view(deck["id"], path.parent, record)}
+        # A completed generation always queues the F19 evaluation pass so the
+        # Studio can show the full metric set without a manual step. Evaluation
+        # is a separate job: it can be cancelled or re-run independently and can
+        # never stall or fail the generation that produced the revision.
+        self._enqueue_evaluation(job, deck, record["revision_id"])
+        return result
+
+    def _evaluate(self, job, context):
+        """Run the full evaluation metric set over one published revision."""
+        deck = self.store.deck(job.deck_id)
+        if deck is None:
+            raise ValueError("Evaluation job has no deck")
+        request = EvaluateRequest.model_validate({k: v for k, v in job.request.items()
+                                                  if k != 'provider_config'})
+        context.report('evaluation', 0, 6, {'note': 'building reference and extracting slides'})
+        judge_caller = None
+        if request.ai_judging:
+            settings = getattr(context, 'provider_settings', self.provider_settings)
+            api_key = self._api_keys.get(settings.evaluator_provider or settings.provider, '')
+            if not api_key:
+                log.warning("No API key for the evaluation judge; faithfulness runs disabled")
+            else:
+                try:
+                    judge_caller = LLMClient.for_evaluation(
+                        settings=settings, provider=settings.evaluator_provider,
+                        model=settings.evaluator_model, api_key=api_key,
+                        cancel_event=context.cancel_event)
+                except Exception as error:  # Judge construction must not kill deterministic metrics.
+                    log.warning("Evaluation judge unavailable (%s); continuing without AI judging", error)
+        context.report('evaluation', 1, 6, {'note': 'semantic, coverage, faithfulness, structure, visual'})
+        summary = run_revision_evaluation(deck['output_dir'], request.revision_id, deck_id=deck['id'],
+                                          judge_caller=judge_caller, ai_judging=judge_caller is not None)
+        context.report('evaluation', 6, 6, {'note': 'report written'})
+        return {'deck_id': deck['id'], 'revision_id': request.revision_id,
+                'evaluation': {key: summary.get(key) for key in
+                               ('overall', 'available_metrics_score', 'readiness', 'metrics',
+                                'coverage', 'faithfulness', 'warning_count', 'report_url')}}
+
+    def _enqueue_evaluation(self, job, deck, revision_id):
+        """Queue the automatic post-generation evaluation; best-effort only.
+
+        AI judging is only requested when the worker actually holds a key for
+        the configured evaluator provider, so keyless/test environments stay
+        deterministic instead of enqueuing a job that can never judge.
+        """
+        try:
+            config = job.request.get('provider_config') or {}
+            judge_provider = config.get('evaluator_provider') or config.get('provider')
+            self.store.enqueue("evaluate", {
+                'revision_id': revision_id,
+                'ai_judging': bool(config) and bool(self._api_keys.get(judge_provider, '')),
+                'provider_config': config,
+            }, deck_id=deck['id'], document_id=job.document_id)
+        except Exception as error:
+            # Scheduling must never turn a finished generation into a failure.
+            log.warning("Could not queue evaluation for revision %s: %s", revision_id, error)
 
     def process_next(self):
         """Caller owns the lifetime lock. Database failures abort the worker."""

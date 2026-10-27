@@ -138,8 +138,9 @@ def test_artifacts_readiness_edits_pinned_history_and_unpublished_rejection(api)
         assert edit.status_code == 202
         # Regeneration captures this older revision and must fail after the queued edit.
         regeneration = client.post(deck_url + "/generate", json={"min_slides": 4, "max_slides": 4})
-        worker.process_next()
-        worker.process_next()
+        worker.process_next()  # auto-evaluation of the first published revision
+        worker.process_next()  # edit
+        worker.process_next()  # regeneration (stale)
     edited = client.get(edit.json()["status_url"]).json()
     assert edited["status"] == "completed"
     stale = client.get(regeneration.json()["status_url"]).json()
