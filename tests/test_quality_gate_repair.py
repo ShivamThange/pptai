@@ -342,8 +342,9 @@ def test_partial_factual_judge_failure_retains_contradiction(monkeypatch):
     records, summary = evaluate([{'slide_no': 1, 'text': 'Revenue was 10 USD. Profit was 20 USD.'}],
                                [{'chunk_id': 'source', 'text': 'Revenue was 10 USD. Profit was 2 USD.'}], load(), caller=Judge())
     assert len(records) == 1 and records[0]['label'] == 'CONTRADICTED'
-    assert summary['status'] == 'FAILED' and summary['score'] is None
+    assert summary['status'] == 'FAILED' and summary['score'] == 0.0
     assert summary['evaluated_claim_count'] == 1 and summary['claim_count'] == 2
+    assert summary['assessment_completeness'] == 0.5 and summary['interval'] == [0.0, 0.5]
 
 
 def test_evaluator_missing_judging_does_not_create_complete_overall(tmp_path, monkeypatch):

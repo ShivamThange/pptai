@@ -9,7 +9,8 @@ DEFAULT = {
     "embedding": {"model": "sentence-transformers/all-MiniLM-L6-v2"},
     "coverage": {"covered_threshold": .65, "partial_threshold": .45, "partial_credit": .5},
     "faithfulness": {"enabled": True, "top_k_evidence": 5, "judge_provider": None, "judge_model": None, "temperature": 0.0},
-    "visual": {"safe_margin_inches": .25, "overlap_ratio": .05, "body_small_font_pt": 14, "dense_words": 180},
+    "visual": {"safe_margin_inches": .25, "overlap_ratio": .05, "body_small_font_pt": 14, "dense_words": 180,
+               "density_min": .15, "density_max": .9},
     "aggregate": {"weights": {"semantic": .2, "coverage": .3, "faithfulness": .2, "functional": .1, "structure": .1, "visual": .1}},
 }
 

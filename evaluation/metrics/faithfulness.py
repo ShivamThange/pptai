@@ -34,10 +34,32 @@ def _claims(slides):
     ]
 
 
+def summarize(records, claim_count):
+    """Assessed point score plus the full-deck interval [B/Q, (B+U)/Q].
+
+    Unassessed claims keep weight in Q, so a partial run can never present its
+    assessed mean as a deck-wide faithfulness value.
+    """
+    assessed, credit = len(records), sum(x["support_credit"] for x in records)
+    unassessed = claim_count - assessed
+    if assessed:
+        score = credit / assessed
+        interval = [credit / claim_count, (credit + unassessed) / claim_count]
+        hallucination = sum(x["label"] in {"UNSUPPORTED", "CONTRADICTED"} for x in records) / assessed
+        contradiction = sum(x["label"] == "CONTRADICTED" for x in records) / assessed
+    else:
+        score, hallucination, contradiction = None, None, None
+        interval = [0.0, 1.0] if claim_count else [0.0, 0.0]
+    return {"score": score, "hallucination_rate": hallucination, "contradiction_rate": contradiction,
+            "assessment_completeness": assessed / claim_count if claim_count else None,
+            "interval": interval, "claim_count": claim_count, "evaluated_claim_count": assessed}
+
+
 def evaluate(slides, chunks, config, enabled=True, *, caller=None):
     if not enabled or not config["faithfulness"]["enabled"]: return [], {"status": "SKIPPED_DISABLED"}
     claims = _claims(slides)
-    if not claims: return [], {"status": "COMPLETED", "score": None, "hallucination_rate": None, "claim_count": 0}
+    if not claims: return [], {"status": "NOT_APPLICABLE", "reason": "No factual assertions extracted",
+                               "score": None, "hallucination_rate": None, "claim_count": 0}
     records = []
     try:
         if not chunks:
@@ -61,11 +83,8 @@ def evaluate(slides, chunks, config, enabled=True, *, caller=None):
     except Exception as exc:
         usage = getattr(locals().get("client"), "usage", None)
         return records, {"status": "FAILED", "reason": str(exc), "usage": usage.as_dict() if usage else None,
-                    "claim_count": len(claims), "evaluated_claim_count": len(records), "score": None,
+                    **summarize(records, len(claims)),
                     "error_class": getattr(exc, "error_class", type(exc).__name__)}
-    total = len(records) or 1
-    return records, {"status": "COMPLETED", "score": sum(x["support_credit"] for x in records)/total,
-                     "hallucination_rate": sum(x["label"] in {"UNSUPPORTED", "CONTRADICTED"} for x in records)/total,
-                     "contradiction_rate": sum(x["label"] == "CONTRADICTED" for x in records)/total, "claim_count": len(records),
+    return records, {"status": "COMPLETED", **summarize(records, len(claims)),
                      "provider": getattr(client, "provider", "external-caller"), "model": getattr(client, "model", "external-caller"),
                      "usage": client.usage.as_dict() if getattr(client, "usage", None) else None}
